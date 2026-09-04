@@ -1,0 +1,23 @@
+[package]
+name = "sdd-application"
+version = "0.1.0"
+description = "Application orchestration for SDD artifact validation"
+publish = false
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "application"
+path = "src/lib.rs"
+
+[features]
+test-doubles = []
+
+[dependencies]
+domain = { package = "sdd-domain", path = "../domain", version = "0.1.0" }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+[lints]
+workspace = true

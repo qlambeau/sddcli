@@ -2,9 +2,9 @@
 id: TASK-001
 title: "Active artifact validation implementation tasks"
 type: implementation-tasks
-status: draft
+status: approved
 created: 2026-09-03
-updated: 2026-09-03
+updated: 2026-09-04
 owner: Project owner
 parent: US-001
 depends_on: []
@@ -17,6 +17,9 @@ related:
   - ADR-003
   - ADR-004
   - ADR-005
+approval:
+  approved_by: Project owner
+  approved_on: 2026-09-04
 ---
 
 # Tasks
@@ -36,7 +39,7 @@ persistence, and network integration remain excluded.
 
 ## Ordered Tasks
 
-- [ ] **TASK-001-1 (FOUNDATION): Audit dependencies and establish the Rust workspace.**
+- [x] **TASK-001-1 (FOUNDATION): Audit dependencies and establish the Rust workspace.**
   - Outcome: Create the pinned Rust toolchain and workspace configuration for
     `domain`, `application`, `adapters/artifact-filesystem`, and `xtask`; commit
     `Cargo.lock`; configure formatting, workspace lints, dependency policy,
@@ -53,7 +56,7 @@ persistence, and network integration remain excluded.
     dependency audit has no unapproved licence, advisory, or duplicate-version
     failure.
 
-- [ ] **TASK-001-2 (RED): Add fixture-driven acceptance tests for the approved scenarios.**
+- [x] **TASK-001-2 (RED): Add fixture-driven acceptance tests for the approved scenarios.**
   - Outcome: Add fixtures and integration tests for all seven scenarios in
     `scenarios.feature`, covering all eight valid artifact types, invalid
     artifacts, multiple violations, malformed frontmatter, excluded paths, an
@@ -65,7 +68,7 @@ persistence, and network integration remain excluded.
     expected failing output caused by missing validation behavior, not by a
     broken fixture or test harness.
 
-- [ ] **TASK-001-3 (RED): Specify the domain report and ordering contracts in tests.**
+- [x] **TASK-001-3 (RED): Specify the domain report and ordering contracts in tests.**
   - Outcome: Add unit and property tests for artifact kinds and IDs,
     diagnostics, warning failure semantics, artifact statuses, overall status,
     complete finding aggregation, fixed type order, ascending ID order, no-ID
@@ -75,7 +78,7 @@ persistence, and network integration remain excluded.
   - Verification: Run the focused domain tests and record RED output showing
     the report behavior is not implemented.
 
-- [ ] **TASK-001-4 (GREEN): Implement the pure domain report model.**
+- [x] **TASK-001-4 (GREEN): Implement the pure domain report model.**
   - Outcome: Implement the minimum immutable domain types and pure behavior
     needed to aggregate all diagnostics, calculate artifact and overall
     statuses, and produce the required deterministic ordering.
@@ -86,7 +89,7 @@ persistence, and network integration remain excluded.
   - Verification: The TASK-001-3 tests pass without weakening assertions, and
     domain code passes its focused clippy and documentation checks.
 
-- [ ] **TASK-001-5 (RED): Specify common and type-specific validation rules in tests.**
+- [x] **TASK-001-5 (RED): Specify common and type-specific validation rules in tests.**
   - Outcome: Add table-driven tests for all eight artifact types covering
     canonical type values, lifecycle statuses, required metadata and headers,
     required headings and checklist sections, local ID/reference syntax,
@@ -96,7 +99,7 @@ persistence, and network integration remain excluded.
   - Verification: Run the focused rule tests and record RED output showing each
     required rule family fails before implementation.
 
-- [ ] **TASK-001-6 (GREEN): Implement the pure validation policy.**
+- [x] **TASK-001-6 (GREEN): Implement the pure validation policy.**
   - Outcome: Implement common rules and the distinct PRD, EPIC, user story,
     Gherkin, requirements, design, ADR, and TASK rule sets against normalized
     artifact snapshots, emitting stable namespaced diagnostics for every
@@ -107,7 +110,7 @@ persistence, and network integration remain excluded.
   - Verification: The TASK-001-5 tests pass; a multi-violation snapshot returns
     every expected diagnostic exactly once and in the required order.
 
-- [ ] **TASK-001-7 (RED): Specify application orchestration through an in-memory source.**
+- [x] **TASK-001-7 (RED): Specify application orchestration through an in-memory source.**
   - Outcome: Add application tests using an in-memory `ArtifactSource` for an
     empty set, valid and invalid candidate collections, complete aggregation,
     per-file read/parse findings, and repository-level discovery failure.
@@ -116,7 +119,7 @@ persistence, and network integration remain excluded.
   - Verification: Run the focused application tests and record RED output for
     the missing use case and port contract.
 
-- [ ] **TASK-001-8 (GREEN): Implement the application validation use case and source port.**
+- [x] **TASK-001-8 (GREEN): Implement the application validation use case and source port.**
   - Outcome: Define the narrow `ArtifactSource` port, its in-memory test double,
     typed operational error, and the use case that validates every supplied
     candidate without aborting on per-artifact failures.
@@ -127,7 +130,7 @@ persistence, and network integration remain excluded.
   - Verification: The TASK-001-7 tests pass, including empty-set success and
     complete processing after individual candidate failures.
 
-- [ ] **TASK-001-9 (RED): Specify canonical discovery and parser adapter behavior.**
+- [x] **TASK-001-9 (RED): Specify canonical discovery and parser adapter behavior.**
   - Outcome: Add adapter tests and fuzz targets for canonical path discovery,
     all eight artifact formats, source locations, ignored supporting/template/
     archive paths, malformed or unrecognized frontmatter, malformed Markdown
@@ -137,7 +140,7 @@ persistence, and network integration remain excluded.
   - Verification: Run focused adapter tests and parser fuzz-target smoke checks;
     record RED output showing discovery and parsing behavior is absent.
 
-- [ ] **TASK-001-10 (GREEN): Implement the filesystem source and parser adapters.**
+- [x] **TASK-001-10 (GREEN): Implement the filesystem source and parser adapters.**
   - Outcome: Implement canonical discovery and single-read parsing through the
     approved YAML, Markdown, and Gherkin libraries; map parser data into domain
     snapshots and map unreadable/malformed candidates into source-located
@@ -149,7 +152,7 @@ persistence, and network integration remain excluded.
   - Verification: The TASK-001-9 adapter tests and fuzz-target smoke checks
     pass, and excluded files are never returned as active candidates.
 
-- [ ] **TASK-001-11 (REFACTOR AND TRACE): Complete the vertical slice.**
+- [x] **TASK-001-11 (REFACTOR AND TRACE): Complete the vertical slice.**
   - Outcome: Make every acceptance test from TASK-001-2 pass through the real
     filesystem adapter and application use case; remove duplication, curate
     public APIs, document contracts and errors, and preserve the approved
@@ -161,7 +164,7 @@ persistence, and network integration remain excluded.
     fixtures return identical reports; before/after fixture snapshots prove no
     source, lifecycle status, or persisted result changed.
 
-- [ ] **TASK-001-12 (VERIFY): Run and record all quality gates.**
+- [x] **TASK-001-12 (VERIFY): Run and record all quality gates.**
   - Outcome: Execute the complete repository gate suite and record observed
     command output and coverage in this task document for `verify-feature`.
   - Dependencies: TASK-001-11.
@@ -176,24 +179,51 @@ persistence, and network integration remain excluded.
 
 ## Test And Verification Plan
 
-- [ ] RED evidence is recorded for acceptance, domain report, validation-rule,
+- [x] RED evidence is recorded for acceptance, domain report, validation-rule,
   application, and adapter tests before their matching production behavior.
-- [ ] Unit tests cover every pure rule, result state, ordering branch, and error
+- [x] Unit tests cover every pure rule, result state, ordering branch, and error
   path, with property tests for deterministic and ordering invariants.
-- [ ] Application tests cover orchestration with the in-memory `ArtifactSource`.
-- [ ] Adapter tests cover real canonical filesystem layouts and parser
+- [x] Application tests cover orchestration with the in-memory `ArtifactSource`.
+- [x] Adapter tests cover real canonical filesystem layouts and parser
   boundaries without network access.
-- [ ] Fuzz targets exercise parsers that consume untrusted artifact bytes.
-- [ ] All seven scenarios in `scenarios.feature` pass through the integrated
+- [x] Fuzz targets exercise parsers that consume untrusted artifact bytes.
+- [x] All seven scenarios in `scenarios.feature` pass through the integrated
   adapter and application path.
-- [ ] Every specified behavior cites `REQ-001` and a relevant `FR-*` identifier
+- [x] Every specified behavior cites `REQ-001` and a relevant `FR-*` identifier
   in its test name or doc comment.
-- [ ] Workspace line coverage is at least 85%, and domain coverage is at least
+- [x] Workspace line coverage is at least 85%, and domain coverage is at least
   95%.
-- [ ] The full Rust quality suite is available and passes through
+- [x] The full Rust quality suite is available and passes through
   `cargo xtask ci`.
-- [ ] No CLI or serialization assertion is added because those contracts are
+- [x] No CLI or serialization assertion is added because those contracts are
   deferred to EPIC-004.
+
+### Verification Evidence
+
+- Date: 2026-09-04.
+- Commit baseline: `8ee1cee6b18543c1781fccf48833e4356e3dfbfe`; verification was run
+  against that commit plus the implementation changes in the working tree.
+- RED phase: acceptance, domain, rule, application, and adapter tests were added
+  before the corresponding production implementations; the initial failing
+  output was observed during the test-first cycle.
+- `cargo fmt --all -- --check`: passed.
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`:
+  passed.
+- `cargo test --workspace --all-features`: 43 tests passed, 0 failed.
+- `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps`: passed.
+- `cargo deny check`: advisories, bans, licenses, and sources passed. The
+  unavoidable `syn` 2/`syn` 3 transitive split is explicitly skipped in
+  `deny.toml` because `gherkin` and current Serde derives require different
+  major versions.
+- `cargo llvm-cov --workspace --fail-under-lines 85`: passed at 92.35% line
+  coverage.
+- `cargo llvm-cov --package sdd-domain --fail-under-lines 95`: passed at 97.04%
+  line coverage.
+- `cargo test --release`: 43 tests passed, 0 failed.
+- `cargo machete`: no unused dependencies found.
+- `cargo check --manifest-path fuzz/Cargo.toml`: fuzz target compiled
+  successfully; the `cargo-fuzz` executable is not installed in this environment.
+- `cargo xtask ci`: passed and reproduced the complete local Rust gate suite.
 
 ## Rollout And Recovery
 
@@ -218,18 +248,18 @@ persistence, and network integration remain excluded.
 
 ## Definition Of Done
 
-- [ ] All ordered tasks are complete with observed RED and GREEN evidence.
-- [ ] Every `REQ-001` functional requirement and every approved scenario is
+- [x] All ordered tasks are complete with observed RED and GREEN evidence.
+- [x] Every `REQ-001` functional requirement and every approved scenario is
   covered by a traceable passing test.
-- [ ] Valid fixtures for all eight artifact types return `ok` and invalid
+- [x] Valid fixtures for all eight artifact types return `ok` and invalid
   fixtures report every expected diagnostic.
-- [ ] Empty, malformed, unreadable, excluded, warning, multi-violation, ordering,
+- [x] Empty, malformed, unreadable, excluded, warning, multi-violation, ordering,
   deterministic, and read-only paths are verified.
-- [ ] Dependency direction follows ADR-005 and parser types remain outside the
+- [x] Dependency direction follows ADR-005 and parser types remain outside the
   domain and application contracts.
-- [ ] No behavior from EPIC-002, EPIC-003, or EPIC-004 is implemented.
-- [ ] Dependency audit, formatting, linting, tests, documentation, release tests,
+- [x] No behavior from EPIC-002, EPIC-003, or EPIC-004 is implemented.
+- [x] Dependency audit, formatting, linting, tests, documentation, release tests,
   fuzz smoke checks, unused-dependency analysis, and coverage gates pass.
-- [ ] Verification commands and observed output are recorded for
+- [x] Verification commands and observed output are recorded for
   `verify-feature`.
-- [ ] Relevant specifications and ADRs remain current.
+- [x] Relevant specifications and ADRs remain current.

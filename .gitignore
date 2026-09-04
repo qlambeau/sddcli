@@ -1,6 +1,7 @@
 # .NET build artifacts
 bin/
 obj/
+target/
 *.user
 TestResults/
 coverage.cobertura.xml
@@ -26,3 +27,7 @@ App_Data/
 
 # Local tool state
 .qmd/
+
+# Rust fuzzing artifacts
+fuzz/artifacts/
+fuzz/target/

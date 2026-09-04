@@ -1,0 +1,20 @@
+[package]
+name = "sdd-domain"
+version = "0.1.0"
+description = "Pure domain model and validation policy for SDD artifacts"
+publish = false
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "domain"
+path = "src/lib.rs"
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+proptest = { workspace = true }
+rstest = { workspace = true }
+
+[lints]
+workspace = true
