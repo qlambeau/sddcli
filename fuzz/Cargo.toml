@@ -1,0 +1,22 @@
+[package]
+name = "sdd-parser-fuzz"
+version = "0.1.0"
+publish = false
+edition = "2024"
+rust-version = "1.95"
+
+[dependencies]
+artifact_filesystem = { package = "sdd-artifact-filesystem", path = "../crates/adapters/artifact-filesystem", version = "0.1.0" }
+domain = { package = "sdd-domain", path = "../crates/domain", version = "0.1.0" }
+libfuzzer-sys = "0.4.13"
+
+[package.metadata]
+cargo-fuzz = true
+
+[[bin]]
+name = "parse_artifact"
+path = "fuzz_targets/parse_artifact.rs"
+doc = false
+bench = false
+
+[workspace]

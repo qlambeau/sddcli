@@ -1,0 +1,15 @@
+[package]
+name = "sdd-xtask"
+version = "0.1.0"
+description = "Repository automation for the SDD validation workspace"
+publish = false
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "xtask"
+path = "src/main.rs"
+
+[lints]
+workspace = true

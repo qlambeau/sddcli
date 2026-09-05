@@ -1,0 +1,22 @@
+[advisories]
+version = 2
+
+[licenses]
+confidence-threshold = 0.8
+allow = [
+    "Apache-2.0",
+    "MIT",
+    "Unicode-3.0",
+]
+
+[bans]
+multiple-versions = "deny"
+wildcards = "deny"
+skip = [
+    # gherkin 0.16.0 uses syn 2 while current serde derives use syn 3.
+    { name = "syn", version = "2.0.119" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

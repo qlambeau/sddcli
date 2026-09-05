@@ -1,0 +1,26 @@
+[package]
+name = "sdd-artifact-filesystem"
+version = "0.1.0"
+description = "Filesystem and parser adapters for SDD artifact validation"
+publish = false
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "artifact_filesystem"
+path = "src/lib.rs"
+
+[dependencies]
+application = { package = "sdd-application", path = "../../application", version = "0.1.0" }
+domain = { package = "sdd-domain", path = "../../domain", version = "0.1.0" }
+gherkin = { workspace = true }
+pulldown-cmark = { workspace = true }
+serde = { workspace = true }
+serde_yaml = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true
