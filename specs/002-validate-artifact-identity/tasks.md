@@ -49,7 +49,7 @@ their existing path-encoded identity checks.
 
 ## Ordered Tasks
 
-- [ ] **TASK-002-1 (RED): Specify pure identity rules in domain tests.**
+- [x] **TASK-002-1 (RED): Specify pure identity rules in domain tests.**
   - Outcome: Add traceable table-driven and property tests for the identity
     index and path-identity policy. Cover an empty set, unique IDs across active
     and historical snapshots, duplicate IDs across lifecycle states, a duplicate
@@ -67,7 +67,7 @@ their existing path-encoded identity checks.
   - Verification: Focused domain tests fail for the expected missing identity
     behavior or API, not because of invalid fixtures or a broken test harness.
 
-- [ ] **TASK-002-2 (GREEN): Implement pure identity indexing and domain report merging.**
+- [x] **TASK-002-2 (GREEN): Implement pure identity indexing and domain report merging.**
   - Outcome: Add the minimum domain behavior needed to collect recognized
     `ArtifactId` values, detect global exact-ID collisions, derive and compare
     path-encoded PRD/epic/ADR identities, create stable actionable
@@ -85,7 +85,7 @@ their existing path-encoded identity checks.
     domain clippy, documentation, and property-test checks pass; no new public
     item lacks a specification link and doc contract.
 
-- [ ] **TASK-002-3 (RED): Specify application identity orchestration through a fake source.**
+- [x] **TASK-002-3 (RED): Specify application identity orchestration through a fake source.**
   - Outcome: Add application tests for the new identity use case and source
     contract using an in-memory source. Cover successful unique active and
     historical candidates, empty success, duplicate and path-mismatch findings,
@@ -102,7 +102,7 @@ their existing path-encoded identity checks.
   - Verification: Focused application tests fail with expected missing identity
     port/orchestration behavior before production implementation is added.
 
-- [ ] **TASK-002-4 (GREEN): Implement the identity source port and use case.**
+- [x] **TASK-002-4 (GREEN): Implement the identity source port and use case.**
   - Outcome: Add the documented application-owned `ArtifactIdentitySource` port,
     its in-memory test double, and the identity validation use case. Orchestrate
     repository-wide candidates, existing structural validation, pure identity
@@ -118,7 +118,7 @@ their existing path-encoded identity checks.
   - Verification: TASK-002-3 tests pass; the fake and identity use case satisfy
     public-item documentation, error, visibility, and layering checks.
 
-- [ ] **TASK-002-5 (RED): Specify filesystem scope, archive discovery, and integrated acceptance behavior.**
+- [x] **TASK-002-5 (RED): Specify filesystem scope, archive discovery, and integrated acceptance behavior.**
   - Outcome: Add failing adapter and integrated tests for repository-wide
     identity discovery. Cover active artifacts, archived packet files under
     `specs/archive/`, superseded statuses, unique identities, duplicate IDs
@@ -137,7 +137,7 @@ their existing path-encoded identity checks.
     absence of historical identity discovery or identity reporting, while the
     existing EPIC-001 active-only tests continue to identify their baseline.
 
-- [ ] **TASK-002-6 (GREEN): Implement repository-wide filesystem identity discovery.**
+- [x] **TASK-002-6 (GREEN): Implement repository-wide filesystem identity discovery.**
   - Outcome: Extend the filesystem adapter to implement
     `ArtifactIdentitySource` while retaining active-only `ArtifactSource`
     discovery. Recognize the canonical active and archived packet paths, sort
@@ -157,7 +157,7 @@ their existing path-encoded identity checks.
     root/specs discovery failures remain typed terminal errors and per-file
     failures remain reportable diagnostics.
 
-- [ ] **TASK-002-7 (REFACTOR AND TRACE): Complete the identity vertical slice and contract coverage.**
+- [x] **TASK-002-7 (REFACTOR AND TRACE): Complete the identity vertical slice and contract coverage.**
   - Outcome: Run the complete approved scenario set through the real filesystem
     source and application use case; add or refine the generic source contract
     suite for both the in-memory and filesystem identity-source implementations;
@@ -176,7 +176,7 @@ their existing path-encoded identity checks.
     artifact content, lifecycle status, or persisted result changed; dependency
     direction remains `application -> domain` and adapter -> application/domain.
 
-- [ ] **TASK-002-8 (VERIFY): Execute and record the complete quality-gate evidence.**
+- [x] **TASK-002-8 (VERIFY): Execute and record the complete quality-gate evidence.**
   - Outcome: Run the constitutional Rust quality suite and record observed output,
     test counts, coverage, dependency audit, and any environment limitation in
     this task document for `verify-feature`.
@@ -194,33 +194,33 @@ their existing path-encoded identity checks.
 
 ## Test And Verification Plan
 
-- [ ] Domain unit tests: Identity indexing, exact-ID collision grouping,
+- [x] Domain unit tests: Identity indexing, exact-ID collision grouping,
   path-encoded PRD/epic/ADR comparison, empty input, complete diagnostic
   retention, severity/rule fields, and stable ordering.
-- [ ] Domain property tests: Repeated evaluation of equal snapshots produces
+- [x] Domain property tests: Repeated evaluation of equal snapshots produces
   equal ordered diagnostics; adding unrelated unique snapshots does not remove
   existing identity findings; identity evaluation remains pure and deterministic.
-- [ ] Application integration tests: In-memory identity source, empty/valid/
+- [x] Application integration tests: In-memory identity source, empty/valid/
   duplicate/mismatch/mixed candidates, malformed parser findings, candidate
   diagnostics, invalid empty candidates, and typed discovery failures.
-- [ ] Port contract tests: One generic observable contract executed against the
+- [x] Port contract tests: One generic observable contract executed against the
   in-memory and filesystem identity-source implementations, including scope,
   ordering, candidate failure, and empty-set behavior.
-- [ ] Filesystem integration tests: Active and archived packet discovery,
+- [x] Filesystem integration tests: Active and archived packet discovery,
   superseded metadata, all exclusions, path/ID mismatches, malformed and
   unreadable files, full-result continuation, deterministic reruns, and
   read-only repository snapshots.
-- [ ] Gherkin acceptance tests: All eight approved scenario headings, including
+- [x] Gherkin acceptance tests: All eight approved scenario headings, including
   all three examples of the path-identity scenario outline, pass through the
   real adapter and application path.
-- [ ] Fuzz checks: Existing parser fuzz target still compiles and exercises
+- [x] Fuzz checks: Existing parser fuzz target still compiles and exercises
   untrusted artifact bytes; no parser dependency or unsafe code is added.
-- [ ] Rust quality gates: `cargo xtask ci` and its constitutional component
+- [x] Rust quality gates: `cargo xtask ci` and its constitutional component
   commands pass with workspace line coverage at least 85% and domain line
   coverage at least 95%; `cargo machete` reports no unused dependencies.
-- [ ] CLI and serialization checks: Not applicable to this slice; explicitly
+- [x] CLI and serialization checks: Not applicable to this slice; explicitly
   deferred to EPIC-004 per US-002 and REQ-002.
-- [ ] .NET and frontend gates: Not applicable; this feature changes only the
+- [x] .NET and frontend gates: Not applicable; this feature changes only the
   Rust workspace and its specifications.
 
 ## Rollout And Recovery
@@ -249,28 +249,56 @@ their existing path-encoded identity checks.
   its same-commit specification/task changes together. Do not alter archived
   artifact contents or statuses as recovery work.
 
+## Verification Evidence
+
+- Date: 2026-09-05.
+- Implementation commit: `f8f2826ee7b3bc0618a384a0c906d546ea3da3a1`.
+- RED phase: focused domain, application, and filesystem identity tests failed
+  before their corresponding production APIs and implementations were added.
+- GREEN phase: 8 domain identity tests, 4 application identity tests, and 8
+  filesystem identity tests passed.
+- `cargo fmt --all -- --check`: passed.
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`:
+  passed.
+- `cargo test --workspace --all-features`: passed; all workspace unit,
+  integration, and acceptance tests passed.
+- `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps`: passed.
+- `cargo deny check`: advisories, bans, licenses, and sources passed.
+- `cargo llvm-cov --workspace --fail-under-lines 85`: passed at 92.29% line
+  coverage.
+- `cargo llvm-cov --package sdd-domain --fail-under-lines 95`: passed at 97.12%
+  line coverage.
+- `cargo test --release`: passed for the workspace.
+- `cargo xtask ci`: passed and reproduced the constitutional local Rust gate
+  suite.
+- `cargo machete`: passed with no unused dependencies.
+- `cargo check --manifest-path fuzz/Cargo.toml`: passed; the parser fuzz target
+  compiled successfully.
+- `cargo fuzz --version`: unavailable in this environment because the cargo-fuzz
+  subcommand is not installed; no fuzz execution was claimed.
+
 ## Definition Of Done
 
-- [ ] All ordered tasks are complete with observed RED and GREEN evidence.
-- [ ] Every `REQ-002` functional and quality requirement is covered by a
+- [x] All ordered tasks are complete with observed RED and GREEN evidence.
+- [x] Every `REQ-002` functional and quality requirement is covered by a
   traceable passing test.
-- [ ] All approved Gherkin scenarios pass through the real adapter and
+- [x] All approved Gherkin scenarios pass through the real adapter and
   application identity path.
-- [ ] Active, archived, superseded, empty, duplicate, mismatch, excluded,
+- [x] Active, archived, superseded, empty, duplicate, mismatch, excluded,
   malformed, unreadable, unrelated, deterministic, and read-only paths are
   verified.
-- [ ] Every conflicting artifact receives an actionable duplicate diagnostic;
+- [x] Every conflicting artifact receives an actionable duplicate diagnostic;
   every path-encoded mismatch remains represented and diagnosable.
-- [ ] Malformed or unrecognized frontmatter retains the EPIC-001 structural
+- [x] Malformed or unrecognized frontmatter retains the EPIC-001 structural
   diagnostic and is not reparsed for identity.
-- [ ] The active-only `ArtifactSource` behavior remains unchanged, and the new
+- [x] The active-only `ArtifactSource` behavior remains unchanged, and the new
   identity port has a documented in-memory test double and contract coverage.
-- [ ] Domain purity, dependency direction, public documentation, typed errors,
+- [x] Domain purity, dependency direction, public documentation, typed errors,
   and no-unsafe/no-new-dependency constraints pass review.
-- [ ] `cargo xtask ci`, coverage thresholds, dependency audit, unused-
+- [x] `cargo xtask ci`, coverage thresholds, dependency audit, unused-
   dependency analysis, release tests, and available fuzz smoke checks pass with
   observed output recorded for `verify-feature`.
-- [ ] No CLI, serialization, persistence, lifecycle, schema, relationship, or
+- [x] No CLI, serialization, persistence, lifecycle, schema, relationship, or
   release behavior is implemented by this feature.
-- [ ] Relevant specifications and ADRs remain current in the implementation
+- [x] Relevant specifications and ADRs remain current in the implementation
   change set.
