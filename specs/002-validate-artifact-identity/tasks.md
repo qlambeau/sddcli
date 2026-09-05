@@ -2,7 +2,7 @@
 id: TASK-002
 title: "Repository-wide artifact identity implementation tasks"
 type: implementation-tasks
-status: in-review
+status: approved
 created: 2026-09-05
 updated: 2026-09-05
 owner: Project owner
@@ -20,6 +20,9 @@ related:
   - ADR-004
   - ADR-005
   - ADR-006
+approval:
+  approved_by: Project owner
+  approved_on: 2026-09-05
 ---
 
 # Tasks
