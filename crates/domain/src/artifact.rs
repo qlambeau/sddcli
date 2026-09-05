@@ -88,17 +88,17 @@ impl ArtifactKind {
     pub fn from_path(path: &str) -> Option<Self> {
         let segments: Vec<&str> = path.split('/').collect();
         if segments.len() == 3 && segments.first() == Some(&"specs") {
-            let packet_kind = match segments.get(2).copied() {
-                Some("user-story.md") => Some(Self::UserStory),
-                Some("scenarios.feature") => Some(Self::Gherkin),
-                Some("requirements.md") => Some(Self::Requirements),
-                Some("design.md") => Some(Self::Design),
-                Some("tasks.md") => Some(Self::Task),
-                _ => None,
-            };
+            let packet_kind = packet_kind(segments.get(2).copied());
             if packet_kind.is_some() {
                 return packet_kind;
             }
+        }
+        if segments.len() == 4
+            && segments.first() == Some(&"specs")
+            && segments.get(1) == Some(&"archive")
+            && segments.get(2).is_some_and(|directory| valid_archive_directory(directory))
+        {
+            return packet_kind(segments.get(3).copied());
         }
         if segments.len() == 3
             && segments.first() == Some(&"specs")
@@ -126,6 +126,17 @@ impl ArtifactKind {
     }
 }
 
+fn packet_kind(file: Option<&str>) -> Option<ArtifactKind> {
+    match file {
+        Some("user-story.md") => Some(ArtifactKind::UserStory),
+        Some("scenarios.feature") => Some(ArtifactKind::Gherkin),
+        Some("requirements.md") => Some(ArtifactKind::Requirements),
+        Some("design.md") => Some(ArtifactKind::Design),
+        Some("tasks.md") => Some(ArtifactKind::Task),
+        _ => None,
+    }
+}
+
 fn valid_numbered_name(value: &str, prefix: &str) -> bool {
     let Some(number) = value.strip_prefix(prefix).and_then(|value| value.strip_prefix('-')) else {
         return false;
@@ -144,6 +155,12 @@ fn valid_numbered_directory(value: &str, prefix: &str) -> bool {
         return false;
     };
     number.len() == 3 && number.bytes().all(|byte| byte.is_ascii_digit())
+}
+
+fn valid_archive_directory(value: &str) -> bool {
+    value.len() > 4
+        && value.as_bytes().get(3) == Some(&b'-')
+        && value.as_bytes().get(0..3).is_some_and(|number| number.iter().all(u8::is_ascii_digit))
 }
 
 /// Identifies a repository-relative artifact path.
@@ -435,6 +452,11 @@ mod tests {
         assert!(
             paths.iter().all(|(value, expected)| ArtifactKind::from_path(value) == Some(*expected))
         );
+        assert_eq!(
+            ArtifactKind::from_path("specs/archive/001-old/user-story.md"),
+            Some(ArtifactKind::UserStory)
+        );
+        assert_eq!(ArtifactKind::from_path("specs/archive/old/user-story.md"), None);
         assert_eq!(ArtifactKind::from_path("specs/not-an-artifact.md"), None);
         assert_eq!(ArtifactKind::from_path("specs/prds/PRD-01.md"), None);
         assert_eq!(ArtifactKind::from_path("specs/adr/ADR-01.md"), None);

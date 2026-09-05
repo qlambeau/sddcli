@@ -184,9 +184,9 @@ their existing path-encoded identity checks.
   - Traceability: `REQ-002` quality requirements; `CONSTITUTION.md` R-AGT-07,
     R-SDD-02, R-TST-01, R-TST-14, R-TST-16, R-TST-17, R-TST-18, R-TST-19,
     R-DIR-01, R-SEP-02, R-TRT-01, R-TRT-20, R-DOC-01, and R-TOOL-04.
-  - Verification: `cargo xtask ci` passes, reproducing `cargo fmt --all --
-    --check`, `cargo clippy --workspace --all-targets --all-features -- -D
-    warnings`, `cargo test --workspace --all-features`, rustdoc with
+  - Verification: `cargo xtask ci` passes, reproducing `cargo fmt --all -- --check`,
+    `cargo clippy --workspace --all-targets --all-features -- -D warnings`,
+    `cargo test --workspace --all-features`, rustdoc with
     `RUSTDOCFLAGS="-D warnings"`, `cargo deny check`, workspace and domain
     `cargo llvm-cov` thresholds, and release tests. Also run `cargo machete` and
     the available fuzz-target compile/smoke command, recording if the

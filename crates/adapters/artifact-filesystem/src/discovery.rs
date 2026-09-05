@@ -1,12 +1,12 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use application::{ArtifactCandidate, ArtifactSource, ValidationError};
+use application::{ArtifactCandidate, ArtifactIdentitySource, ArtifactSource, ValidationError};
 use domain::{ArtifactKind, ArtifactPath, Diagnostic, Severity};
 
 use crate::parse_artifact;
 
-/// Discovers active artifacts below a repository root.
+/// Discovers artifacts below a repository root for active and identity validation.
 #[derive(Clone, Debug)]
 pub struct FilesystemArtifactSource {
     root: PathBuf,
@@ -28,6 +28,21 @@ impl FilesystemArtifactSource {
 
 impl ArtifactSource for FilesystemArtifactSource {
     fn discover(&self) -> Result<Vec<ArtifactCandidate>, ValidationError> {
+        self.discover_from_scope(false)
+    }
+}
+
+impl ArtifactIdentitySource for FilesystemArtifactSource {
+    fn discover_identities(&self) -> Result<Vec<ArtifactCandidate>, ValidationError> {
+        self.discover_from_scope(true)
+    }
+}
+
+impl FilesystemArtifactSource {
+    fn discover_from_scope(
+        &self,
+        include_archive: bool,
+    ) -> Result<Vec<ArtifactCandidate>, ValidationError> {
         if !self.root.is_dir() {
             return Err(ValidationError::Discovery(format!(
                 "repository root is not a directory: {}",
@@ -45,7 +60,7 @@ impl ArtifactSource for FilesystemArtifactSource {
         }
 
         let mut paths = Vec::new();
-        collect_canonical_paths(&self.root, &specs, &mut paths)?;
+        collect_canonical_paths(&self.root, &specs, include_archive, &mut paths)?;
         paths.sort_by(|left, right| left.0.cmp(&right.0));
         paths
             .into_iter()
@@ -59,6 +74,7 @@ type DiscoveredPath = (String, ArtifactKind, PathBuf);
 fn collect_canonical_paths(
     root: &Path,
     directory: &Path,
+    include_archive: bool,
     paths: &mut Vec<DiscoveredPath>,
 ) -> Result<(), ValidationError> {
     let entries = fs::read_dir(directory).map_err(|error| {
@@ -73,7 +89,7 @@ fn collect_canonical_paths(
         })?;
         let path = entry.path();
         let relative = path_to_relative(root, &path)?;
-        if is_excluded(&relative) {
+        if is_excluded(&relative, include_archive) {
             continue;
         }
         if let Some(kind) = ArtifactKind::from_path(&relative) {
@@ -87,7 +103,7 @@ fn collect_canonical_paths(
             })?
             .is_dir()
         {
-            collect_canonical_paths(root, &path, paths)?;
+            collect_canonical_paths(root, &path, include_archive, paths)?;
         }
     }
     Ok(())
@@ -132,6 +148,8 @@ fn path_to_relative(root: &Path, path: &Path) -> Result<String, ValidationError>
         .map(|parts| parts.join("/"))
 }
 
-fn is_excluded(relative: &str) -> bool {
-    relative.split('/').any(|component| component == "templates" || component == "archive")
+fn is_excluded(relative: &str, include_archive: bool) -> bool {
+    relative
+        .split('/')
+        .any(|component| component == "templates" || !include_archive && component == "archive")
 }

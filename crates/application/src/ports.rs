@@ -13,6 +13,17 @@ pub trait ArtifactSource {
     fn discover(&self) -> Result<Vec<ArtifactCandidate>, ValidationError>;
 }
 
+/// Supplies every candidate at the canonical active and historical identity locations.
+pub trait ArtifactIdentitySource {
+    /// Returns candidates in any order; the identity report applies stable ordering.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ValidationError::Discovery`] when the repository-wide candidate set cannot
+    /// be established. Per-file failures must be represented as candidate diagnostics.
+    fn discover_identities(&self) -> Result<Vec<ArtifactCandidate>, ValidationError>;
+}
+
 /// Represents one discovered artifact or one per-file source failure.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ArtifactCandidate {
