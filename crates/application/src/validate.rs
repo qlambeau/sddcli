@@ -1,6 +1,9 @@
 use std::collections::BTreeMap;
 
-use domain::{ArtifactPath, ArtifactResult, Diagnostic, ValidationReport, validate_identities};
+use domain::{
+    ArtifactPath, ArtifactResult, Diagnostic, ValidationReport, validate_identities,
+    validate_relationships,
+};
 
 use crate::{ArtifactIdentitySource, ArtifactSource, ValidationError};
 
@@ -11,6 +14,13 @@ pub struct Validator<S> {
 
 /// Validates artifact identities across active and historical candidates.
 pub struct IdentityValidator<S> {
+    source: S,
+}
+
+/// Validates artifact relationship targets across active and historical candidates.
+///
+/// Covers: REQ-003 FR-001 through FR-010.
+pub struct RelationshipValidator<S> {
     source: S,
 }
 
@@ -50,6 +60,52 @@ where
             let identity_diagnostics =
                 diagnostics_by_path.get(candidate.path()).cloned().unwrap_or_default();
             results.push(result.with_diagnostics(identity_diagnostics));
+        }
+
+        Ok(ValidationReport::from_results(results))
+    }
+}
+
+impl<S> RelationshipValidator<S>
+where
+    S: ArtifactIdentitySource,
+{
+    /// Creates a relationship validator with an injected source.
+    ///
+    /// Covers: REQ-003 FR-001 through FR-010.
+    #[must_use]
+    pub const fn new(source: S) -> Self {
+        Self { source }
+    }
+
+    /// Validates every relationship target and aggregates all findings.
+    ///
+    /// Covers: REQ-003 FR-001 through FR-010.
+    ///
+    /// # Errors
+    ///
+    /// Returns a discovery error only when the source cannot establish the repository-wide
+    /// candidate set. Individual candidate and relationship failures are retained in the report.
+    pub fn validate(&self) -> Result<ValidationReport, ValidationError> {
+        let candidates = self.source.discover_identities()?;
+        let snapshots = candidates
+            .iter()
+            .filter_map(|candidate| candidate.snapshot().cloned())
+            .collect::<Vec<_>>();
+        let diagnostics_by_path = diagnostics_by_path(validate_relationships(&snapshots));
+        let mut results = Vec::with_capacity(candidates.len());
+
+        for candidate in candidates {
+            let result = match (candidate.snapshot(), candidate.diagnostic()) {
+                (Some(snapshot), _) => ArtifactResult::from_snapshot(snapshot),
+                (None, Some(diagnostic)) => {
+                    ArtifactResult::from_diagnostic(candidate.path().clone(), diagnostic.clone())
+                }
+                (None, None) => ArtifactResult::empty(candidate.path().clone()),
+            };
+            let relationship_diagnostics =
+                diagnostics_by_path.get(candidate.path()).cloned().unwrap_or_default();
+            results.push(result.with_diagnostics(relationship_diagnostics));
         }
 
         Ok(ValidationReport::from_results(results))

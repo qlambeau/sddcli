@@ -8,7 +8,7 @@ mod validate;
 
 pub use error::ValidationError;
 pub use ports::{ArtifactCandidate, ArtifactIdentitySource, ArtifactSource};
-pub use validate::{IdentityValidator, Validator};
+pub use validate::{IdentityValidator, RelationshipValidator, Validator};
 
 #[cfg(any(test, feature = "test-doubles"))]
 pub use validate::fake;
