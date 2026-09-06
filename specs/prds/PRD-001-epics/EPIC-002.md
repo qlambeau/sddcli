@@ -2,9 +2,9 @@
 id: EPIC-002
 title: "Identity and relationship integrity"
 type: epic-brief
-status: approved
+status: implemented
 created: 2026-09-05
-updated: 2026-09-06
+updated: 2026-09-07
 owner: TBD
 parent: PRD-001
 depends_on: [EPIC-001]
@@ -66,23 +66,23 @@ downstream workflow actions.
 | Verify repository-wide artifact identity | Agents and CI can identify duplicate IDs and path/ID mismatches across current and historical artifacts before downstream use | Implemented as `US-002`; identity findings remain part of the integrity baseline |
 | Validate relationship targets | Agents and CI can identify missing and wrong-kind relationship targets without suppressing other artifact results | Implemented as `US-003`; current and historical recognized artifacts participate while templates remain excluded |
 | Validate reciprocal relationships | Agents and CI can identify asymmetric `related` and supersession links before downstream use | Implemented as `US-004`; valid unrelated relationships and deterministic read-only results remain part of the baseline |
-| Detect relationship cycles | Agents and CI can identify invalid cycles across parent, dependency, and supersession relationships before downstream use | Candidate for the next story; exact cycle-diagnostic granularity and overlapping-cycle reporting are deferred to story refinement |
+| Detect relationship cycles | Agents and CI can identify invalid cycles across parent, dependency, and supersession relationships before downstream use | Implemented as `US-005`; cycle identities, overlapping-cycle reporting, and source-owned diagnostics are covered by the approved packet |
 
 ## Success Criteria
 
-- [ ] Valid active and historical artifact graphs pass integrity validation.
-- [ ] Duplicate IDs are reported with every conflicting artifact location.
-- [ ] Path-encoded filename and frontmatter ID mismatches are reported.
-- [ ] Missing and wrong-kind relationship targets are reported without aborting
+- [x] Valid active and historical artifact graphs pass integrity validation.
+- [x] Duplicate IDs are reported with every conflicting artifact location.
+- [x] Path-encoded filename and frontmatter ID mismatches are reported.
+- [x] Missing and wrong-kind relationship targets are reported without aborting
   validation of other artifacts.
-- [ ] Non-reciprocal `related` and supersession links are reported.
-- [ ] Invalid parent, dependency, and supersession cycles are reported.
-- [ ] Cycle failures do not suppress valid unrelated artifact and relationship
+- [x] Non-reciprocal `related` and supersession links are reported.
+- [x] Invalid parent, dependency, and supersession cycles are reported.
+- [x] Cycle failures do not suppress valid unrelated artifact and relationship
   results.
-- [ ] Archived and superseded artifacts participate in integrity checks while
+- [x] Archived and superseded artifacts participate in integrity checks while
   templates and supporting documents remain excluded.
-- [ ] Results are complete, deterministic, offline, and read-only.
-- [ ] Schema and release relationship checks remain deferred until their
+- [x] Results are complete, deterministic, offline, and read-only.
+- [x] Schema and release relationship checks remain deferred until their
   contracts exist.
 
 ## Dependencies
@@ -93,8 +93,9 @@ downstream workflow actions.
 
 ## Open Questions
 
-- Cycle diagnostic granularity and the presentation of overlapping cycles remain
-  open for the cycle-detection story; this does not block the epic boundary.
+- Exact human-readable cycle diagnostic wording remains flexible under `REQ-005`;
+  the stable rule ID, cycle identity, source ownership, and overlapping-cycle
+  behavior are implemented.
 
 ## Readiness Checklist
 
