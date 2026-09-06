@@ -1,10 +1,234 @@
-use domain::{ArtifactResult, ValidationReport};
+use std::collections::BTreeMap;
 
-use crate::{ArtifactSource, ValidationError};
+use domain::{
+    ArtifactPath, ArtifactResult, Diagnostic, ValidationReport, validate_identities,
+    validate_reciprocal_relationships, validate_relationship_cycles, validate_relationships,
+};
+
+use crate::{ArtifactIdentitySource, ArtifactSource, ValidationError};
 
 /// Validates all candidates supplied by an [`ArtifactSource`].
 pub struct Validator<S> {
     source: S,
+}
+
+/// Validates artifact identities across active and historical candidates.
+pub struct IdentityValidator<S> {
+    source: S,
+}
+
+/// Validates artifact relationship targets across active and historical candidates.
+///
+/// Covers: REQ-003 FR-001 through FR-010.
+pub struct RelationshipValidator<S> {
+    source: S,
+}
+
+/// Validates relationship targets and reciprocal memberships across all candidates.
+pub struct ReciprocalRelationshipValidator<S> {
+    source: S,
+}
+
+/// Validates structural, target, reciprocal, and cycle relationships together.
+///
+/// Covers: REQ-005 FR-001, FR-006, and FR-010 through FR-014.
+pub struct CycleValidator<S> {
+    source: S,
+}
+
+impl<S> IdentityValidator<S>
+where
+    S: ArtifactIdentitySource,
+{
+    /// Creates an identity validator with an injected source.
+    #[must_use]
+    pub const fn new(source: S) -> Self {
+        Self { source }
+    }
+
+    /// Validates every identity candidate and aggregates all findings.
+    ///
+    /// # Errors
+    ///
+    /// Returns a discovery error only when the source cannot establish the repository-wide
+    /// candidate set. Individual candidate failures are retained in the returned report.
+    pub fn validate(&self) -> Result<ValidationReport, ValidationError> {
+        let candidates = self.source.discover_identities()?;
+        let snapshots = candidates
+            .iter()
+            .filter_map(|candidate| candidate.snapshot().cloned())
+            .collect::<Vec<_>>();
+        let diagnostics_by_path = diagnostics_by_path(validate_identities(&snapshots));
+        let mut results = Vec::with_capacity(candidates.len());
+
+        for candidate in candidates {
+            let result = match (candidate.snapshot(), candidate.diagnostic()) {
+                (Some(snapshot), _) => ArtifactResult::from_snapshot(snapshot),
+                (None, Some(diagnostic)) => {
+                    ArtifactResult::from_diagnostic(candidate.path().clone(), diagnostic.clone())
+                }
+                (None, None) => ArtifactResult::empty(candidate.path().clone()),
+            };
+            let identity_diagnostics =
+                diagnostics_by_path.get(candidate.path()).cloned().unwrap_or_default();
+            results.push(result.with_diagnostics(identity_diagnostics));
+        }
+
+        Ok(ValidationReport::from_results(results))
+    }
+}
+
+impl<S> RelationshipValidator<S>
+where
+    S: ArtifactIdentitySource,
+{
+    /// Creates a relationship validator with an injected source.
+    ///
+    /// Covers: REQ-003 FR-001 through FR-010.
+    #[must_use]
+    pub const fn new(source: S) -> Self {
+        Self { source }
+    }
+
+    /// Validates every relationship target and aggregates all findings.
+    ///
+    /// Covers: REQ-003 FR-001 through FR-010.
+    ///
+    /// # Errors
+    ///
+    /// Returns a discovery error only when the source cannot establish the repository-wide
+    /// candidate set. Individual candidate and relationship failures are retained in the report.
+    pub fn validate(&self) -> Result<ValidationReport, ValidationError> {
+        let candidates = self.source.discover_identities()?;
+        let snapshots = candidates
+            .iter()
+            .filter_map(|candidate| candidate.snapshot().cloned())
+            .collect::<Vec<_>>();
+        let diagnostics_by_path = diagnostics_by_path(validate_relationships(&snapshots));
+        let mut results = Vec::with_capacity(candidates.len());
+
+        for candidate in candidates {
+            let result = match (candidate.snapshot(), candidate.diagnostic()) {
+                (Some(snapshot), _) => ArtifactResult::from_snapshot(snapshot),
+                (None, Some(diagnostic)) => {
+                    ArtifactResult::from_diagnostic(candidate.path().clone(), diagnostic.clone())
+                }
+                (None, None) => ArtifactResult::empty(candidate.path().clone()),
+            };
+            let relationship_diagnostics =
+                diagnostics_by_path.get(candidate.path()).cloned().unwrap_or_default();
+            results.push(result.with_diagnostics(relationship_diagnostics));
+        }
+
+        Ok(ValidationReport::from_results(results))
+    }
+}
+
+impl<S> ReciprocalRelationshipValidator<S>
+where
+    S: ArtifactIdentitySource,
+{
+    /// Creates a reciprocal relationship validator with an injected source.
+    #[must_use]
+    pub const fn new(source: S) -> Self {
+        Self { source }
+    }
+
+    /// Validates relationship targets and reciprocal memberships for every candidate.
+    ///
+    /// Covers: REQ-004 FR-001 through FR-010.
+    ///
+    /// # Errors
+    ///
+    /// Returns a discovery error only when the source cannot establish the repository-wide
+    /// candidate set. Individual candidate and relationship failures are retained in the report.
+    pub fn validate(&self) -> Result<ValidationReport, ValidationError> {
+        let candidates = self.source.discover_identities()?;
+        let snapshots = candidates
+            .iter()
+            .filter_map(|candidate| candidate.snapshot().cloned())
+            .collect::<Vec<_>>();
+        let mut diagnostics = diagnostics_by_path(validate_relationships(&snapshots));
+        for diagnostic in validate_reciprocal_relationships(&snapshots) {
+            diagnostics.entry(diagnostic.path().clone()).or_default().push(diagnostic);
+        }
+        let mut results = Vec::with_capacity(candidates.len());
+
+        for candidate in candidates {
+            let result = match (candidate.snapshot(), candidate.diagnostic()) {
+                (Some(snapshot), _) => ArtifactResult::from_snapshot(snapshot),
+                (None, Some(diagnostic)) => {
+                    ArtifactResult::from_diagnostic(candidate.path().clone(), diagnostic.clone())
+                }
+                (None, None) => ArtifactResult::empty(candidate.path().clone()),
+            };
+            let relationship_diagnostics =
+                diagnostics.get(candidate.path()).cloned().unwrap_or_default();
+            results.push(result.with_diagnostics(relationship_diagnostics));
+        }
+
+        Ok(ValidationReport::from_results(results))
+    }
+}
+
+impl<S> CycleValidator<S>
+where
+    S: ArtifactIdentitySource,
+{
+    /// Creates a cycle-aware validator with an injected identity source.
+    ///
+    /// Covers: DES-005 application interfaces and data flow.
+    #[must_use]
+    pub const fn new(source: S) -> Self {
+        Self { source }
+    }
+
+    /// Validates every identity candidate and merges all relationship findings.
+    ///
+    /// # Errors
+    ///
+    /// Returns a discovery error only when the source cannot establish the repository-wide
+    /// candidate set. Individual candidate and relationship failures are retained in the report.
+    ///
+    /// Covers: REQ-005 FR-001, FR-006, and FR-010 through FR-014.
+    pub fn validate(&self) -> Result<ValidationReport, ValidationError> {
+        let candidates = self.source.discover_identities()?;
+        let snapshots = candidates
+            .iter()
+            .filter_map(|candidate| candidate.snapshot().cloned())
+            .collect::<Vec<_>>();
+        let mut diagnostics = diagnostics_by_path(validate_relationships(&snapshots));
+        for diagnostic in validate_reciprocal_relationships(&snapshots)
+            .into_iter()
+            .chain(validate_relationship_cycles(&snapshots))
+        {
+            diagnostics.entry(diagnostic.path().clone()).or_default().push(diagnostic);
+        }
+        let mut results = Vec::with_capacity(candidates.len());
+
+        for candidate in candidates {
+            let result = match (candidate.snapshot(), candidate.diagnostic()) {
+                (Some(snapshot), _) => ArtifactResult::from_snapshot(snapshot),
+                (None, Some(diagnostic)) => {
+                    ArtifactResult::from_diagnostic(candidate.path().clone(), diagnostic.clone())
+                }
+                (None, None) => ArtifactResult::empty(candidate.path().clone()),
+            };
+            let relationship_diagnostics =
+                diagnostics.get(candidate.path()).cloned().unwrap_or_default();
+            results.push(result.with_diagnostics(relationship_diagnostics));
+        }
+
+        Ok(ValidationReport::from_results(results))
+    }
+}
+
+fn diagnostics_by_path(diagnostics: Vec<Diagnostic>) -> BTreeMap<ArtifactPath, Vec<Diagnostic>> {
+    let mut grouped = BTreeMap::new();
+    for diagnostic in diagnostics {
+        grouped.entry(diagnostic.path().clone()).or_insert_with(Vec::new).push(diagnostic);
+    }
+    grouped
 }
 
 impl<S> Validator<S>
@@ -45,7 +269,7 @@ where
 /// Provides a convenient in-memory source for application tests and callers with normalized data.
 #[cfg(any(test, feature = "test-doubles"))]
 pub mod fake {
-    use super::{ArtifactSource, ValidationError};
+    use super::{ArtifactIdentitySource, ArtifactSource, ValidationError};
 
     /// Returns a fixed candidate collection without performing I/O.
     #[derive(Clone, Debug)]
@@ -70,6 +294,36 @@ pub mod fake {
 
     impl ArtifactSource for InMemoryArtifactSource {
         fn discover(&self) -> Result<Vec<crate::ArtifactCandidate>, ValidationError> {
+            if let Some(message) = &self.error {
+                return Err(ValidationError::Discovery(message.clone()));
+            }
+            Ok(self.candidates.clone())
+        }
+    }
+
+    /// Returns a fixed active and historical candidate collection without performing I/O.
+    #[derive(Clone, Debug)]
+    pub struct InMemoryArtifactIdentitySource {
+        candidates: Vec<crate::ArtifactCandidate>,
+        error: Option<String>,
+    }
+
+    impl InMemoryArtifactIdentitySource {
+        /// Creates a source that returns the supplied identity candidates.
+        #[must_use]
+        pub fn new(candidates: Vec<crate::ArtifactCandidate>) -> Self {
+            Self { candidates, error: None }
+        }
+
+        /// Creates a source that returns a repository-level identity discovery error.
+        #[must_use]
+        pub fn failing(message: impl Into<String>) -> Self {
+            Self { candidates: Vec::new(), error: Some(message.into()) }
+        }
+    }
+
+    impl ArtifactIdentitySource for InMemoryArtifactIdentitySource {
+        fn discover_identities(&self) -> Result<Vec<crate::ArtifactCandidate>, ValidationError> {
             if let Some(message) = &self.error {
                 return Err(ValidationError::Discovery(message.clone()));
             }

@@ -59,6 +59,18 @@ impl ArtifactResult {
         }
     }
 
+    /// Adds identity or other cross-artifact diagnostics to this result.
+    #[must_use]
+    pub fn with_diagnostics<I>(mut self, diagnostics: I) -> Self
+    where
+        I: IntoIterator<Item = Diagnostic>,
+    {
+        self.violations.extend(diagnostics);
+        self.violations.sort_by(Diagnostic::stable_cmp);
+        self.status = status_for(&self.violations);
+        self
+    }
+
     /// Creates a result for a source failure that has no normalized snapshot.
     #[must_use]
     pub fn from_diagnostic(path: ArtifactPath, diagnostic: Diagnostic) -> Self {
