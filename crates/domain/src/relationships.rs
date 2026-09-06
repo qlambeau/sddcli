@@ -181,7 +181,7 @@ struct RelationshipTargetId(String);
 
 impl RelationshipTargetId {
     fn try_new(value: &str) -> Option<Self> {
-        if value.is_empty() || is_unresolved(value) || !valid_reference(value) {
+        if !is_concrete_reference(value) {
             return None;
         }
         Some(Self(value.to_owned()))
@@ -198,6 +198,10 @@ impl RelationshipTargetId {
 
 fn valid_reference(value: &str) -> bool {
     REFERENCE_PREFIXES.iter().any(|prefix| valid_identifier_text(value, prefix))
+}
+
+pub(crate) fn is_concrete_reference(value: &str) -> bool {
+    !value.is_empty() && !is_unresolved(value) && valid_reference(value)
 }
 
 fn valid_identifier_text(value: &str, prefix: &str) -> bool {
