@@ -127,13 +127,13 @@ fn wrong_kind(
 }
 
 #[derive(Clone, Copy)]
-enum RelationshipPolicy {
+pub(crate) enum RelationshipPolicy {
     Ignore,
     Any,
     Expected(ArtifactKind),
 }
 
-fn relationship_policy(kind: ArtifactKind, field: &str) -> RelationshipPolicy {
+pub(crate) fn relationship_policy(kind: ArtifactKind, field: &str) -> RelationshipPolicy {
     match field {
         "parent" => match kind {
             ArtifactKind::Epic | ArtifactKind::UserStory => {
@@ -153,7 +153,7 @@ fn relationship_policy(kind: ArtifactKind, field: &str) -> RelationshipPolicy {
     }
 }
 
-fn value_strings(value: &MetadataValue) -> Vec<&str> {
+pub(crate) fn value_strings(value: &MetadataValue) -> Vec<&str> {
     match value {
         MetadataValue::Scalar(value) => vec![value],
         MetadataValue::Sequence(values) => values.iter().map(String::as_str).collect(),

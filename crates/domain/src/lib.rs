@@ -3,6 +3,7 @@
 #![deny(clippy::unwrap_used, clippy::expect_used)]
 
 mod artifact;
+mod cycles;
 mod diagnostic;
 mod document;
 mod identity;
@@ -14,6 +15,7 @@ mod rules;
 pub use artifact::{
     ArtifactId, ArtifactKind, ArtifactPath, ArtifactSnapshot, Metadata, MetadataValue,
 };
+pub use cycles::validate_relationship_cycles;
 pub use diagnostic::{Diagnostic, Location, RuleId, Severity};
 pub use document::{ChecklistItem, DocumentSnapshot, FeatureSnapshot, Heading, SourceLine};
 pub use identity::validate_identities;

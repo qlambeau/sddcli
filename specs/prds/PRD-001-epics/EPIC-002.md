@@ -4,29 +4,30 @@ title: "Identity and relationship integrity"
 type: epic-brief
 status: approved
 created: 2026-09-05
-updated: 2026-09-05
+updated: 2026-09-06
 owner: TBD
 parent: PRD-001
 depends_on: [EPIC-001]
 requires: [PRD-001, EPIC-001]
 blockers: []
-related: [ADR-002, ADR-003, ADR-004, ADR-005]
+related: [ADR-002, ADR-003, ADR-004, ADR-005, ADR-006]
 approval:
   approved_by: Project owner
-  approved_on: 2026-09-05
+  approved_on: 2026-09-06
 ---
 
 # Epic Brief
 
 <!-- Refines EPIC-002 from PRD-001 into a bounded identity and relationship
-integrity capability. Candidate slices are seeds for story refinement. -->
+integrity capability. Candidate slices are seeds for story refinement; delivered
+slices remain listed so the brief reflects the current implementation baseline. -->
 
 ## Outcome Statement
 
 Agents and CI can verify the identity and relationship integrity of the entire
 SDD repository, including active, archived, and superseded artifacts, so that
-duplicate identities and broken links are detected before downstream workflow
-actions.
+duplicate identities, broken links, and relationship cycles are detected before
+downstream workflow actions.
 
 ## Capability Boundaries
 
@@ -42,6 +43,8 @@ actions.
   the complete repository validation.
 - Require reciprocal `related` and supersession relationships to agree.
 - Detect cycles in parent, dependency, and supersession relationships.
+- Preserve valid unrelated artifacts and relationships when integrity failures
+  are reported.
 - Produce complete, deterministic, offline, read-only integrity results.
 - Continue excluding templates and non-artifact supporting documents from the
   integrity graph.
@@ -60,7 +63,10 @@ actions.
 
 | Candidate slice | User value | Notes / risks |
 | --- | --- | --- |
-| Verify repository-wide identity and relationship integrity in one pass | Agents and CI can identify duplicate IDs and broken artifact links, including links involving historical artifacts, before promotion or downstream use | The graph must distinguish valid reciprocal links from invalid cycles and must retain every actionable diagnostic without treating templates as repository artifacts |
+| Verify repository-wide artifact identity | Agents and CI can identify duplicate IDs and path/ID mismatches across current and historical artifacts before downstream use | Implemented as `US-002`; identity findings remain part of the integrity baseline |
+| Validate relationship targets | Agents and CI can identify missing and wrong-kind relationship targets without suppressing other artifact results | Implemented as `US-003`; current and historical recognized artifacts participate while templates remain excluded |
+| Validate reciprocal relationships | Agents and CI can identify asymmetric `related` and supersession links before downstream use | Implemented as `US-004`; valid unrelated relationships and deterministic read-only results remain part of the baseline |
+| Detect relationship cycles | Agents and CI can identify invalid cycles across parent, dependency, and supersession relationships before downstream use | Candidate for the next story; exact cycle-diagnostic granularity and overlapping-cycle reporting are deferred to story refinement |
 
 ## Success Criteria
 
@@ -71,6 +77,8 @@ actions.
   validation of other artifacts.
 - [ ] Non-reciprocal `related` and supersession links are reported.
 - [ ] Invalid parent, dependency, and supersession cycles are reported.
+- [ ] Cycle failures do not suppress valid unrelated artifact and relationship
+  results.
 - [ ] Archived and superseded artifacts participate in integrity checks while
   templates and supporting documents remain excluded.
 - [ ] Results are complete, deterministic, offline, and read-only.
@@ -81,11 +89,12 @@ actions.
 
 - Depends on: EPIC-001 (implemented)
 - Required artifacts: PRD-001 (approved), EPIC-001 (implemented), ADR-002,
-  ADR-003, ADR-004, and ADR-005 (approved)
+  ADR-003, ADR-004, ADR-005, and ADR-006 (approved)
 
 ## Open Questions
 
-No unresolved or blocking questions.
+- Cycle diagnostic granularity and the presentation of overlapping cycles remain
+  open for the cycle-detection story; this does not block the epic boundary.
 
 ## Readiness Checklist
 
