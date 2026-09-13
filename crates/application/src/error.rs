@@ -9,6 +9,18 @@ pub enum ValidationError {
     Discovery(String),
 }
 
+/// Describes an operational failure during Spec-Ready evaluation.
+#[derive(Debug, Eq, Error, PartialEq)]
+#[non_exhaustive]
+pub enum ReadinessError {
+    /// Indicates that artifact discovery failed.
+    #[error(transparent)]
+    Validation(#[from] ValidationError),
+    /// Indicates that the requested packet directory could not be resolved.
+    #[error("readiness packet was not found: {0}")]
+    PacketNotFound(domain::ArtifactPath),
+}
+
 /// Describes an operational failure during artifact promotion.
 #[derive(Debug, Eq, Error, PartialEq)]
 #[non_exhaustive]

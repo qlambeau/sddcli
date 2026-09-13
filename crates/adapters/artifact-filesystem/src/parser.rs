@@ -5,7 +5,8 @@ use serde_yaml::Value;
 
 use domain::{
     ArtifactKind, ArtifactPath, ArtifactSnapshot, ChecklistItem, Diagnostic, DocumentSnapshot,
-    FeatureSnapshot, Heading, Location, Metadata, MetadataValue, Severity, SourceLine,
+    FeatureSnapshot, Heading, Location, Metadata, MetadataValue, ScenarioCoverage, Severity,
+    SourceLine,
 };
 
 const FRONTMATTER_SEPARATOR: &str = "---";
@@ -187,8 +188,12 @@ fn feature_snapshot(
         feature.scenarios.iter().chain(feature.rules.iter().flat_map(|rule| rule.scenarios.iter()));
     let mut scenario_count = 0;
     let mut step_presence = (false, false, false);
+    let mut coverage = std::collections::BTreeSet::new();
     for scenario in scenarios {
         scenario_count += 1;
+        if let Some(category) = ScenarioCoverage::from_name(&scenario.name) {
+            coverage.insert(category);
+        }
         for step in &scenario.steps {
             match step.ty {
                 StepType::Given => step_presence.0 = true,
@@ -197,7 +202,7 @@ fn feature_snapshot(
             }
         }
     }
-    FeatureSnapshot::new(
+    FeatureSnapshot::new_with_coverage(
         parent,
         status,
         Some(feature.name),
@@ -205,6 +210,7 @@ fn feature_snapshot(
         step_presence.0,
         step_presence.1,
         step_presence.2,
+        coverage,
     )
 }
 

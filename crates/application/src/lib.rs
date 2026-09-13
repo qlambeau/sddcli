@@ -6,9 +6,10 @@ mod error;
 mod packet;
 mod ports;
 mod promotion;
+mod readiness;
 mod validate;
 
-pub use error::{PromotionError, ValidationError};
+pub use error::{PromotionError, ReadinessError, ValidationError};
 pub use packet::{
     PacketPromoter, PacketPromotionOutcome, PacketPromotionResult, PromotePacketCommand,
 };
@@ -17,6 +18,7 @@ pub use ports::{
     ArtifactPromotionStore, ArtifactSource, BatchPromotionEntry, Clock, SourceArtifact,
 };
 pub use promotion::{PromoteArtifactCommand, Promoter, PromotionOutcome};
+pub use readiness::{EvaluateSpecReadyCommand, SpecReadyEvaluator};
 pub use validate::{
     CycleValidator, IdentityValidator, ReciprocalRelationshipValidator, RelationshipValidator,
     Validator,

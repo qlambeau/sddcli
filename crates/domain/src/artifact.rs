@@ -21,13 +21,17 @@ pub enum ArtifactKind {
     Design,
     /// An architecture decision record.
     Adr,
+    /// A database schema document.
+    Database,
+    /// A table schema document.
+    Table,
     /// An implementation task document.
     Task,
 }
 
 impl ArtifactKind {
     /// Returns artifact kinds in the required report order.
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 10] = [
         Self::Prd,
         Self::Epic,
         Self::UserStory,
@@ -35,6 +39,8 @@ impl ArtifactKind {
         Self::Requirements,
         Self::Design,
         Self::Adr,
+        Self::Database,
+        Self::Table,
         Self::Task,
     ];
 
@@ -49,6 +55,8 @@ impl ArtifactKind {
             Self::Requirements => "requirements",
             Self::Design => "design",
             Self::Adr => "adr",
+            Self::Database => "database",
+            Self::Table => "table",
             Self::Task => "task",
         }
     }
@@ -64,6 +72,8 @@ impl ArtifactKind {
             Self::Requirements => Some("feature-requirements"),
             Self::Design => Some("feature-design"),
             Self::Adr => Some("architecture-decision-record"),
+            Self::Database => Some("database-schema"),
+            Self::Table => Some("table-schema"),
             Self::Task => Some("implementation-tasks"),
         }
     }
@@ -79,6 +89,8 @@ impl ArtifactKind {
             Self::Requirements => Some("REQ"),
             Self::Design => Some("DES"),
             Self::Adr => Some("ADR"),
+            Self::Database => Some("DB"),
+            Self::Table => Some("TABLE"),
             Self::Task => Some("TASK"),
         }
     }
@@ -113,6 +125,17 @@ impl ArtifactKind {
             && segments.get(2).is_some_and(|file| valid_numbered_name(file, "PRD"))
         {
             return Some(Self::Prd);
+        }
+        if segments.len() == 3
+            && segments.first() == Some(&"specs")
+            && segments.get(1) == Some(&"schema")
+        {
+            if segments.get(2).is_some_and(|file| valid_numbered_name(file, "DB")) {
+                return Some(Self::Database);
+            }
+            if segments.get(2).is_some_and(|file| valid_numbered_name(file, "TABLE")) {
+                return Some(Self::Table);
+            }
         }
         if segments.len() == 4
             && segments.first() == Some(&"specs")
@@ -567,7 +590,7 @@ mod tests {
     /// Covers: REQ-001 FR-007 — each kind has stable output metadata.
     #[test]
     fn exposes_kind_contracts() {
-        assert_eq!(ArtifactKind::ALL.len(), 8);
+        assert_eq!(ArtifactKind::ALL.len(), 10);
         assert_eq!(ArtifactKind::Prd.token(), "prd");
         assert_eq!(ArtifactKind::Gherkin.expected_type(), None);
         assert_eq!(ArtifactKind::Gherkin.id_prefix(), None);

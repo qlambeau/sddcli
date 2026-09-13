@@ -157,6 +157,12 @@ fn parsed_candidate_can_be_validated_after_discovery() {
 }
 
 fn valid_artifact_contents(kind: ArtifactKind) -> String {
+    if kind == ArtifactKind::Database {
+        return "---\nid: DB-001\ntitle: Database\ntype: database-schema\nstatus: approved\ncreated: 2026-09-04\nupdated: 2026-09-04\nowner: project-owner\nengine: SQLite\nfile_path: specs/data.sqlite\ntables: []\nrelated: []\n---\n## Database Schema\n## Database Overview\n## Configuration & Extensions\n## Schema Evolution & Migrations\n## Table Catalog\n".to_string();
+    }
+    if kind == ArtifactKind::Table {
+        return "---\nid: TABLE-001\ntitle: Table\ntype: table-schema\nstatus: approved\ncreated: 2026-09-04\nupdated: 2026-09-04\nowner: project-owner\ndatabase: DB-001\ntable_name: entries\ntable_type: table\nrelated: []\n---\n## Table Schema\n## Purpose\n## DDL (Schema Definition)\n## Column Specifications\n## Indexes & Constraints\n## Invariants & Validation Rules\n".to_string();
+    }
     if kind == ArtifactKind::Gherkin {
         return "# parent: US-001\n# status: approved\n\nFeature: Validate\n\n  Scenario: Works\n    Given an active repository\n    When validation runs\n    Then the report succeeds\n".to_string();
     }
@@ -260,6 +266,21 @@ fn headings_for(kind: ArtifactKind) -> &'static [&'static str] {
             "Final Notes",
             "Additional Notes",
         ],
+        ArtifactKind::Database => &[
+            "Database Schema",
+            "Database Overview",
+            "Configuration & Extensions",
+            "Schema Evolution & Migrations",
+            "Table Catalog",
+        ],
+        ArtifactKind::Table => &[
+            "Table Schema",
+            "Purpose",
+            "DDL (Schema Definition)",
+            "Column Specifications",
+            "Indexes & Constraints",
+            "Invariants & Validation Rules",
+        ],
         ArtifactKind::Task => &[
             "Tasks",
             "Implementation Approach",
@@ -281,13 +302,15 @@ fn canonical_path(kind: ArtifactKind) -> &'static str {
         ArtifactKind::Requirements => "specs/validate/requirements.md",
         ArtifactKind::Design => "specs/validate/design.md",
         ArtifactKind::Adr => "specs/adr/ADR-001.md",
+        ArtifactKind::Database => "specs/schema/DB-001.md",
+        ArtifactKind::Table => "specs/schema/TABLE-001.md",
         ArtifactKind::Task => "specs/validate/tasks.md",
     }
 }
 
-/// Covers: REQ-001 FR-001 through FR-009 — all eight supported types pass through the real source and use case.
+/// Covers: REQ-001 FR-001 through FR-009 and REQ-008 FR-002 — all recognized types pass through the real source and use case.
 #[test]
-fn validates_all_eight_types_as_one_successful_report() {
+fn validates_all_recognized_types_as_one_successful_report() {
     let Ok(directory) = tempfile::tempdir() else { return };
     let kinds = ArtifactKind::ALL;
     assert!(kinds.iter().all(|kind| {
@@ -299,7 +322,7 @@ fn validates_all_eight_types_as_one_successful_report() {
     assert!(result.is_ok());
     let Ok(report) = result else { return };
     assert_eq!(report.status(), OverallStatus::Success, "report: {report:?}");
-    assert_eq!(report.artifacts().len(), 8);
+    assert_eq!(report.artifacts().len(), 10);
     assert!(report.artifacts().iter().all(
         |artifact| artifact.status() == ArtifactStatus::Ok && artifact.violations().is_empty()
     ));

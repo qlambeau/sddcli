@@ -4,7 +4,7 @@ use crate::{ArtifactKind, ArtifactPath, ArtifactSnapshot, Diagnostic, MetadataVa
 
 const MISSING_TARGET_RULE: &str = "ARTIFACT.RELATIONSHIP.MISSING_TARGET";
 const WRONG_KIND_RULE: &str = "ARTIFACT.RELATIONSHIP.WRONG_KIND";
-const RELATIONSHIP_FIELDS: [&str; 8] = [
+const RELATIONSHIP_FIELDS: [&str; 10] = [
     "parent",
     "epic",
     "depends_on",
@@ -13,6 +13,8 @@ const RELATIONSHIP_FIELDS: [&str; 8] = [
     "related",
     "supersedes",
     "superseded_by",
+    "database",
+    "tables",
 ];
 const REFERENCE_PREFIXES: [&str; 12] =
     ["PRD", "EPIC", "US", "REQ", "DES", "ADR", "TASK", "CHART", "DB", "TABLE", "OBS", "REL"];
@@ -149,6 +151,12 @@ pub(crate) fn relationship_policy(kind: ArtifactKind, field: &str) -> Relationsh
         }
         "depends_on" | "requires" | "blockers" | "related" => RelationshipPolicy::Any,
         "supersedes" | "superseded_by" => RelationshipPolicy::Expected(kind),
+        "database" if kind == ArtifactKind::Table => {
+            RelationshipPolicy::Expected(ArtifactKind::Database)
+        }
+        "tables" if kind == ArtifactKind::Database => {
+            RelationshipPolicy::Expected(ArtifactKind::Table)
+        }
         _ => RelationshipPolicy::Ignore,
     }
 }
@@ -171,6 +179,8 @@ fn kind_label(kind: ArtifactKind) -> String {
         ArtifactKind::Requirements => "requirements",
         ArtifactKind::Design => "design",
         ArtifactKind::Adr => "ADR",
+        ArtifactKind::Database => "database",
+        ArtifactKind::Table => "table",
         ArtifactKind::Task => "task",
     };
     format!("{} ({display})", token.to_ascii_uppercase())
