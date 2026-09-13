@@ -7,6 +7,7 @@ mod cycles;
 mod diagnostic;
 mod document;
 mod identity;
+mod promotion;
 mod reciprocal;
 mod relationships;
 mod report;
@@ -19,6 +20,10 @@ pub use cycles::validate_relationship_cycles;
 pub use diagnostic::{Diagnostic, Location, RuleId, Severity};
 pub use document::{ChecklistItem, DocumentSnapshot, FeatureSnapshot, Heading, SourceLine};
 pub use identity::validate_identities;
+pub use promotion::{
+    LifecycleState, PromotionActor, PromotionActorError, PromotionDecision, PromotionFacts,
+    PromotionPlan, PromotionRequest, PromotionTimestamp, decide_promotion, state_of,
+};
 pub use reciprocal::validate_reciprocal_relationships;
 pub use relationships::validate_relationships;
 pub use report::{ArtifactResult, ArtifactStatus, OverallStatus, ValidationReport};

@@ -4,14 +4,24 @@
 
 mod error;
 mod ports;
+mod promotion;
 mod validate;
 
-pub use error::ValidationError;
-pub use ports::{ArtifactCandidate, ArtifactIdentitySource, ArtifactSource};
+pub use error::{PromotionError, ValidationError};
+pub use ports::{
+    ArtifactCandidate, ArtifactIdentitySource, ArtifactPromotionStore, ArtifactSource, Clock,
+    SourceArtifact,
+};
+pub use promotion::{PromoteArtifactCommand, Promoter, PromotionOutcome};
 pub use validate::{
     CycleValidator, IdentityValidator, ReciprocalRelationshipValidator, RelationshipValidator,
     Validator,
 };
 
 #[cfg(any(test, feature = "test-doubles"))]
-pub use validate::fake;
+pub mod fake {
+    //! Test doubles for application ports.
+
+    pub use crate::ports::fake::{FixedClock, InMemoryPromotionStore};
+    pub use crate::validate::fake::{InMemoryArtifactIdentitySource, InMemoryArtifactSource};
+}

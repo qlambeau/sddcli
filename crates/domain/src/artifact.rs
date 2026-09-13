@@ -167,6 +167,12 @@ fn valid_archive_directory(value: &str) -> bool {
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct ArtifactPath(String);
 
+impl Display for ArtifactPath {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
 impl ArtifactPath {
     /// Creates a validated repository-relative path.
     ///

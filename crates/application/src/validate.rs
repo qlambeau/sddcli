@@ -268,6 +268,10 @@ where
 
 /// Provides a convenient in-memory source for application tests and callers with normalized data.
 #[cfg(any(test, feature = "test-doubles"))]
+#[allow(
+    unreachable_pub,
+    reason = "test doubles are re-exported from the crate root under the same cfg"
+)]
 pub mod fake {
     use super::{ArtifactIdentitySource, ArtifactSource, ValidationError};
 

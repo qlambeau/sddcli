@@ -4,6 +4,8 @@
 
 mod discovery;
 mod parser;
+mod promotion_store;
 
 pub use discovery::FilesystemArtifactSource;
 pub use parser::parse_artifact;
+pub use promotion_store::{FilesystemPromotionStore, SystemClock};
