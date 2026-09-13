@@ -2,9 +2,9 @@
 id: DES-006
 title: "Single-artifact lifecycle promotion design"
 type: feature-design
-status: approved
+status: implemented
 created: 2026-09-07
-updated: 2026-09-07
+updated: 2026-09-13
 owner: TBD
 parent: US-006
 depends_on: [DES-005]

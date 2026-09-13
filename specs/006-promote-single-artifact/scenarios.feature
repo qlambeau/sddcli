@@ -1,5 +1,5 @@
 # parent: US-006
-# status: approved
+# status: implemented
 
 Feature: Promote a single SDD artifact through its lifecycle
   LLM coding agents and human reviewers need to advance one recognized SDD

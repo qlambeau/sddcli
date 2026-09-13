@@ -252,6 +252,35 @@ impl PromotionFacts {
         self.validation_diagnostics = diagnostics;
         self
     }
+
+    /// Combines independent prerequisite facts conservatively.
+    #[must_use]
+    pub fn conjoined_with(&self, other: &Self) -> Self {
+        let mut blockers = self.blockers.clone();
+        blockers.extend(other.blockers.iter().cloned());
+        let mut relationship_diagnostics = self.relationship_diagnostics.clone();
+        relationship_diagnostics.extend(other.relationship_diagnostics.iter().cloned());
+        let mut validation_diagnostics = self.validation_diagnostics.clone();
+        validation_diagnostics.extend(other.validation_diagnostics.iter().cloned());
+        Self {
+            review_entry_checks_pass: self.review_entry_checks_pass
+                && other.review_entry_checks_pass,
+            approval_checks_pass: self.approval_checks_pass && other.approval_checks_pass,
+            human_approval_confirmed: self.human_approval_confirmed
+                && other.human_approval_confirmed,
+            implementation_evidence_recorded: self.implementation_evidence_recorded
+                && other.implementation_evidence_recorded,
+            archive_location_canonical: self.archive_location_canonical
+                && other.archive_location_canonical,
+            closed_release_conditions_satisfied: self.closed_release_conditions_satisfied
+                && other.closed_release_conditions_satisfied,
+            approved_successor_with_valid_links: self.approved_successor_with_valid_links
+                && other.approved_successor_with_valid_links,
+            blockers,
+            relationship_diagnostics,
+            validation_diagnostics,
+        }
+    }
 }
 
 /// Describes one real promotion to persist.

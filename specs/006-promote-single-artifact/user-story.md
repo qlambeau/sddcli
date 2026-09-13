@@ -2,9 +2,9 @@
 id: US-006
 title: "Promote a single SDD artifact through its lifecycle"
 type: user-story
-status: approved
+status: implemented
 created: 2026-09-07
-updated: 2026-09-07
+updated: 2026-09-13
 owner: TBD
 parent: PRD-001
 epic: EPIC-003

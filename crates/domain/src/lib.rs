@@ -7,6 +7,7 @@ mod cycles;
 mod diagnostic;
 mod document;
 mod identity;
+mod packet;
 mod promotion;
 mod reciprocal;
 mod relationships;
@@ -20,6 +21,11 @@ pub use cycles::validate_relationship_cycles;
 pub use diagnostic::{Diagnostic, Location, RuleId, Severity};
 pub use document::{ChecklistItem, DocumentSnapshot, FeatureSnapshot, Heading, SourceLine};
 pub use identity::validate_identities;
+pub use packet::{
+    ImplementationPacketRef, PacketParticipant, PacketParticipantRole, PacketPromotionDecision,
+    PacketPromotionFacts, PacketPromotionPlan, PacketPromotionStep, PacketReferenceError,
+    next_lifecycle_state, plan_packet_promotion,
+};
 pub use promotion::{
     LifecycleState, PromotionActor, PromotionActorError, PromotionDecision, PromotionFacts,
     PromotionPlan, PromotionRequest, PromotionTimestamp, decide_promotion, state_of,

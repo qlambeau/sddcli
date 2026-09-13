@@ -2,9 +2,9 @@
 id: REQ-006
 title: "Single-artifact lifecycle promotion requirements"
 type: feature-requirements
-status: approved
+status: implemented
 created: 2026-09-07
-updated: 2026-09-07
+updated: 2026-09-13
 owner: TBD
 parent: US-006
 depends_on: [REQ-005]

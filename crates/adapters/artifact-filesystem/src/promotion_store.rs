@@ -3,7 +3,10 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use application::{ArtifactPromotionStore, Clock, PromotionError, SourceArtifact};
+use application::{
+    ArtifactPacketPromotionStore, ArtifactPromotionStore, BatchPromotionEntry, Clock,
+    PromotionError, SourceArtifact,
+};
 use domain::{ArtifactKind, ArtifactPath, PromotionPlan, PromotionTimestamp};
 
 /// Loads and atomically patches artifact promotion metadata on the local filesystem.
@@ -58,6 +61,120 @@ impl ArtifactPromotionStore for FilesystemPromotionStore {
         };
         atomic_replace(&absolute, &patched)?;
         Ok(SourceArtifact::new(source.path().clone(), patched))
+    }
+}
+
+impl ArtifactPacketPromotionStore for FilesystemPromotionStore {
+    fn load_batch(&self, paths: &[ArtifactPath]) -> Result<Vec<SourceArtifact>, PromotionError> {
+        paths.iter().map(|path| self.load(path)).collect()
+    }
+
+    fn commit_batch(
+        &mut self,
+        entries: &[BatchPromotionEntry],
+    ) -> Result<Vec<SourceArtifact>, PromotionError> {
+        let mut seen = std::collections::BTreeSet::new();
+        let mut staged = Vec::with_capacity(entries.len());
+        for entry in entries {
+            if !seen.insert(entry.source().path().clone())
+                || entry.source().path() != entry.plan().path()
+            {
+                return Err(PromotionError::Write(
+                    "batch promotion contains duplicate or mismatched paths".to_string(),
+                ));
+            }
+            let absolute = self.absolute(entry.source().path());
+            let current = fs::read_to_string(&absolute).map_err(|error| {
+                PromotionError::Source(format!("{}: {error}", absolute.display()))
+            })?;
+            if current != entry.source().contents() {
+                return Err(PromotionError::Conflict(entry.source().path().clone()));
+            }
+        }
+
+        for entry in entries {
+            let kind = ArtifactKind::from_path(entry.source().path().as_str())
+                .ok_or_else(|| PromotionError::UnsupportedFormat(entry.source().path().clone()))?;
+            let patched = if kind == ArtifactKind::Gherkin {
+                patch_gherkin(entry.source().contents(), entry.plan())?
+            } else {
+                patch_markdown(entry.source().contents(), entry.plan())?
+            };
+            staged.push(StagedPromotion {
+                path: self.absolute(entry.source().path()),
+                original: entry.source().contents().to_string(),
+                patched,
+                temporary: None,
+            });
+        }
+
+        for item in &mut staged {
+            match write_temporary(&item.path, &item.patched) {
+                Ok(temporary) => item.temporary = Some(temporary),
+                Err(error) => {
+                    cleanup_temporary(&staged);
+                    return Err(error);
+                }
+            }
+        }
+
+        for (replaced, item) in staged.iter().enumerate() {
+            let Some(temporary) = item.temporary.as_ref() else {
+                cleanup_temporary(&staged);
+                return Err(PromotionError::Write("batch temporary file is missing".to_string()));
+            };
+            if let Err(error) = fs::rename(temporary, &item.path) {
+                cleanup_temporary(&staged);
+                for replaced_item in staged.iter().take(replaced) {
+                    let _ = atomic_replace(&replaced_item.path, &replaced_item.original);
+                }
+                return Err(PromotionError::Write(format!("{}: {error}", item.path.display())));
+            }
+        }
+
+        Ok(entries
+            .iter()
+            .zip(staged)
+            .map(|(entry, item)| SourceArtifact::new(entry.source().path().clone(), item.patched))
+            .collect())
+    }
+}
+
+struct StagedPromotion {
+    path: PathBuf,
+    original: String,
+    patched: String,
+    temporary: Option<PathBuf>,
+}
+
+fn write_temporary(path: &Path, contents: &str) -> Result<PathBuf, PromotionError> {
+    let parent =
+        path.parent().ok_or_else(|| PromotionError::Write("target has no parent".to_string()))?;
+    let file_name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| PromotionError::Write("target file name is not UTF-8".to_string()))?;
+    let temporary = parent.join(format!(".{file_name}.packet-promotion.tmp"));
+    let result = (|| {
+        let mut file = fs::File::create(&temporary)
+            .map_err(|error| PromotionError::Write(format!("{}: {error}", temporary.display())))?;
+        file.write_all(contents.as_bytes())
+            .map_err(|error| PromotionError::Write(format!("{}: {error}", temporary.display())))?;
+        file.sync_all()
+            .map_err(|error| PromotionError::Write(format!("{}: {error}", temporary.display())))?;
+        Ok(temporary.clone())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result
+}
+
+fn cleanup_temporary(staged: &[StagedPromotion]) {
+    for item in staged {
+        if let Some(temporary) = &item.temporary {
+            let _ = fs::remove_file(temporary);
+        }
     }
 }
 
@@ -335,5 +452,189 @@ mod tests {
         assert!(contents.contains("# status: in-review\n"));
         assert!(contents.contains("# promoted_to: in-review\n"));
         assert!(contents.ends_with("Feature: Demo\n"));
+    }
+
+    /// Covers: REQ-007 FR-010 through FR-012 — batch patching preserves both source formats.
+    #[test]
+    fn commits_markdown_and_gherkin_batch_without_moving_files() {
+        let temp = match TempDir::new() {
+            Ok(temp) => temp,
+            Err(_) => std::process::abort(),
+        };
+        let markdown_path = path("specs/feature/user-story.md");
+        let gherkin_path = path("specs/feature/scenarios.feature");
+        let markdown_absolute = temp.path().join(markdown_path.as_str());
+        let gherkin_absolute = temp.path().join(gherkin_path.as_str());
+        if fs::create_dir_all(markdown_absolute.parent().unwrap_or_else(|| temp.path())).is_err()
+            || fs::write(&markdown_absolute, "---\nstatus: draft\ntitle: T\n---\n# Body\n").is_err()
+            || fs::write(&gherkin_absolute, "# parent: US-001\n# status: draft\nFeature: Demo\n")
+                .is_err()
+        {
+            std::process::abort();
+        }
+        let mut store = FilesystemPromotionStore::new(temp.path());
+        let markdown_source = match store.load(&markdown_path) {
+            Ok(source) => source,
+            Err(_) => std::process::abort(),
+        };
+        let gherkin_source = match store.load(&gherkin_path) {
+            Ok(source) => source,
+            Err(_) => std::process::abort(),
+        };
+        let entries = vec![
+            BatchPromotionEntry::new(
+                markdown_source,
+                PromotionPlan::new(
+                    markdown_path.clone(),
+                    LifecycleState::Draft,
+                    LifecycleState::InReview,
+                    actor(),
+                    PromotionTimestamp::from_unix_seconds(7),
+                ),
+            ),
+            BatchPromotionEntry::new(
+                gherkin_source,
+                PromotionPlan::new(
+                    gherkin_path.clone(),
+                    LifecycleState::Draft,
+                    LifecycleState::InReview,
+                    actor(),
+                    PromotionTimestamp::from_unix_seconds(7),
+                ),
+            ),
+        ];
+
+        let result = store.commit_batch(&entries);
+
+        assert!(result.is_ok());
+        assert!(markdown_absolute.exists());
+        assert!(gherkin_absolute.exists());
+        assert!(
+            fs::read_to_string(&markdown_absolute)
+                .is_ok_and(|contents| contents.contains("status: in-review\n"))
+        );
+        assert!(
+            fs::read_to_string(&gherkin_absolute)
+                .is_ok_and(|contents| contents.contains("# status: in-review\n"))
+        );
+    }
+
+    /// Covers: REQ-007 FR-014 — every expected source is checked before any replacement.
+    #[test]
+    fn detects_any_batch_conflict_before_writing() {
+        let temp = match TempDir::new() {
+            Ok(temp) => temp,
+            Err(_) => std::process::abort(),
+        };
+        let first = path("specs/feature/user-story.md");
+        let second = path("specs/feature/requirements.md");
+        let first_absolute = temp.path().join(first.as_str());
+        let second_absolute = temp.path().join(second.as_str());
+        if fs::create_dir_all(first_absolute.parent().unwrap_or_else(|| temp.path())).is_err()
+            || fs::write(&first_absolute, "---\nstatus: draft\ntitle: First\n---\n").is_err()
+            || fs::write(&second_absolute, "---\nstatus: draft\ntitle: Second\n---\n").is_err()
+        {
+            std::process::abort();
+        }
+        let mut store = FilesystemPromotionStore::new(temp.path());
+        let first_source = match store.load(&first) {
+            Ok(source) => source,
+            Err(_) => std::process::abort(),
+        };
+        let second_source = match store.load(&second) {
+            Ok(source) => source,
+            Err(_) => std::process::abort(),
+        };
+        if fs::write(&second_absolute, "changed\n").is_err() {
+            std::process::abort();
+        }
+        let entries = vec![
+            BatchPromotionEntry::new(
+                first_source,
+                PromotionPlan::new(
+                    first.clone(),
+                    LifecycleState::Draft,
+                    LifecycleState::InReview,
+                    actor(),
+                    PromotionTimestamp::from_unix_seconds(7),
+                ),
+            ),
+            BatchPromotionEntry::new(
+                second_source,
+                PromotionPlan::new(
+                    second.clone(),
+                    LifecycleState::Draft,
+                    LifecycleState::InReview,
+                    actor(),
+                    PromotionTimestamp::from_unix_seconds(7),
+                ),
+            ),
+        ];
+
+        let result = store.commit_batch(&entries);
+
+        assert!(matches!(result, Err(PromotionError::Conflict(path)) if path == second));
+        assert!(
+            fs::read_to_string(&first_absolute)
+                .is_ok_and(|contents| contents.contains("status: draft\n"))
+        );
+    }
+
+    /// Covers: REQ-007 FR-010 and FR-014 — malformed formats are rejected before replacement.
+    #[test]
+    fn rejects_unsupported_batch_format_before_writing_other_targets() {
+        let temp = match TempDir::new() {
+            Ok(temp) => temp,
+            Err(_) => std::process::abort(),
+        };
+        let valid = path("specs/feature/user-story.md");
+        let invalid = path("specs/feature/requirements.md");
+        let valid_absolute = temp.path().join(valid.as_str());
+        let invalid_absolute = temp.path().join(invalid.as_str());
+        if fs::create_dir_all(valid_absolute.parent().unwrap_or_else(|| temp.path())).is_err()
+            || fs::write(&valid_absolute, "---\nstatus: draft\ntitle: Valid\n---\n").is_err()
+            || fs::write(&invalid_absolute, "not frontmatter\n").is_err()
+        {
+            std::process::abort();
+        }
+        let mut store = FilesystemPromotionStore::new(temp.path());
+        let valid_source = match store.load(&valid) {
+            Ok(source) => source,
+            Err(_) => std::process::abort(),
+        };
+        let invalid_source = match store.load(&invalid) {
+            Ok(source) => source,
+            Err(_) => std::process::abort(),
+        };
+        let entries = vec![
+            BatchPromotionEntry::new(
+                valid_source,
+                PromotionPlan::new(
+                    valid.clone(),
+                    LifecycleState::Draft,
+                    LifecycleState::InReview,
+                    actor(),
+                    PromotionTimestamp::from_unix_seconds(7),
+                ),
+            ),
+            BatchPromotionEntry::new(
+                invalid_source,
+                PromotionPlan::new(
+                    invalid,
+                    LifecycleState::Draft,
+                    LifecycleState::InReview,
+                    actor(),
+                    PromotionTimestamp::from_unix_seconds(7),
+                ),
+            ),
+        ];
+
+        let result = store.commit_batch(&entries);
+
+        assert!(matches!(result, Err(PromotionError::UnsupportedFormat(_))));
+        assert!(
+            fs::read_to_string(&valid_absolute)
+                .is_ok_and(|contents| contents.contains("status: draft\n"))
+        );
     }
 }

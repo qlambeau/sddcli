@@ -3,14 +3,18 @@
 #![deny(clippy::unwrap_used, clippy::expect_used)]
 
 mod error;
+mod packet;
 mod ports;
 mod promotion;
 mod validate;
 
 pub use error::{PromotionError, ValidationError};
+pub use packet::{
+    PacketPromoter, PacketPromotionOutcome, PacketPromotionResult, PromotePacketCommand,
+};
 pub use ports::{
-    ArtifactCandidate, ArtifactIdentitySource, ArtifactPromotionStore, ArtifactSource, Clock,
-    SourceArtifact,
+    ArtifactCandidate, ArtifactIdentitySource, ArtifactPacketPromotionStore,
+    ArtifactPromotionStore, ArtifactSource, BatchPromotionEntry, Clock, SourceArtifact,
 };
 pub use promotion::{PromoteArtifactCommand, Promoter, PromotionOutcome};
 pub use validate::{
@@ -22,6 +26,8 @@ pub use validate::{
 pub mod fake {
     //! Test doubles for application ports.
 
-    pub use crate::ports::fake::{FixedClock, InMemoryPromotionStore};
+    pub use crate::ports::fake::{
+        FixedClock, InMemoryPacketPromotionStore, InMemoryPromotionStore,
+    };
     pub use crate::validate::fake::{InMemoryArtifactIdentitySource, InMemoryArtifactSource};
 }

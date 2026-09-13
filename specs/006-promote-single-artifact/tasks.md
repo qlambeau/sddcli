@@ -2,9 +2,9 @@
 id: TASK-006
 title: "Single-artifact lifecycle promotion implementation tasks"
 type: implementation-tasks
-status: approved
+status: implemented
 created: 2026-09-07
-updated: 2026-09-07
+updated: 2026-09-13
 owner: TBD
 parent: US-006
 depends_on: [TASK-005]
@@ -53,7 +53,7 @@ persistence, network access, and AI judgment.
 
 ## Ordered Tasks
 
-- [ ] **TASK-006-1 (RED): Specify the pure lifecycle policy in domain tests.**
+- [x] **TASK-006-1 (RED): Specify the pure lifecycle policy in domain tests.**
   - Outcome: Add traceable unit and property tests for recognized lifecycle
     states, the strict forward transition matrix, guarded supersession,
     terminal-state rejection, active same-state idempotency, unsupported
@@ -76,7 +76,7 @@ persistence, network access, and AI judgment.
     promotion types and policy are absent, not because the test harness is
     invalid.
 
-- [ ] **TASK-006-2 (GREEN): Implement the pure domain promotion policy.**
+- [x] **TASK-006-2 (GREEN): Implement the pure domain promotion policy.**
   - Outcome: Add lifecycle state, actor/timestamp values, promotion request,
     prerequisite facts, promotion plan, decision result, and stable promotion
     diagnostics. Implement strict transitions, terminal-state rules, active
@@ -94,7 +94,7 @@ persistence, network access, and AI judgment.
     deterministic decisions and idempotency, all public items are documented,
     and no existing domain tests change their expectations.
 
-- [ ] **TASK-006-3 (RED): Specify application orchestration with port tests.**
+- [x] **TASK-006-3 (RED): Specify application orchestration with port tests.**
   - Outcome: Add public application integration tests and in-memory test-double
     contracts for repository candidate discovery, target loading, validation
     aggregation, no-write rejection, active idempotent no-op behavior, clock
@@ -116,7 +116,7 @@ persistence, network access, and AI judgment.
     promotion ports, errors, and handler are absent, not because the fakes or
     assertions are invalid.
 
-- [ ] **TASK-006-4 (GREEN): Implement application promotion orchestration.**
+- [x] **TASK-006-4 (GREEN): Implement application promotion orchestration.**
   - Outcome: Add the application-owned `ArtifactPromotionStore` and `Clock`
     ports, typed promotion errors, in-memory doubles, and the promotion use
     case. Discover the active and historical candidate set once, reuse existing
@@ -138,7 +138,7 @@ persistence, network access, and AI judgment.
     operational failures, and deterministic results. Existing validator tests
     remain green.
 
-- [ ] **TASK-006-5 (RED): Specify filesystem promotion behavior in adapter tests.**
+- [x] **TASK-006-5 (RED): Specify filesystem promotion behavior in adapter tests.**
   - Outcome: Add temporary-repository integration tests for Markdown
     frontmatter and Gherkin header patching, all eight artifact kinds, latest
     promotion metadata replacement, body and unrelated-byte preservation,
@@ -160,7 +160,7 @@ persistence, network access, and AI judgment.
     store, patchers, and system clock are absent, not because temporary
     repository setup is invalid.
 
-- [ ] **TASK-006-6 (GREEN): Implement format-preserving atomic filesystem promotion.**
+- [x] **TASK-006-6 (GREEN): Implement format-preserving atomic filesystem promotion.**
   - Outcome: Add the filesystem promotion store, Markdown and Gherkin metadata
     patchers, expected-source conflict check, same-directory temporary-file
     replacement, and system clock adapter. Update only status and the latest
@@ -180,7 +180,7 @@ persistence, network access, and AI judgment.
     unchanged body bytes, and no movement. Application tests pass against the
     concrete store and system clock.
 
-- [ ] **TASK-006-7 (REFACTOR AND TRACE): Complete acceptance, compatibility, and documentation coverage.**
+- [x] **TASK-006-7 (REFACTOR AND TRACE): Complete acceptance, compatibility, and documentation coverage.**
   - Outcome: Run all 13 approved scenario headings and every Scenario Outline
     example through the application use case and real filesystem store. Curate
     exports, remove duplication, verify stable diagnostic ordering, preserve
@@ -202,7 +202,7 @@ persistence, network access, and AI judgment.
     existing active, identity, target, reciprocal, and cycle validator tests
     pass without changed expectations; documentation builds cleanly.
 
-- [ ] **TASK-006-8 (VERIFY): Execute and record complete Rust quality-gate evidence.**
+- [x] **TASK-006-8 (VERIFY): Execute and record complete Rust quality-gate evidence.**
   - Outcome: Execute the constitutional quality suite and additional repository
     checks, record observed output, test counts, coverage, dependency results,
     release results, and environment limitations in this task document.
@@ -223,30 +223,41 @@ persistence, network access, and AI judgment.
 
 ## Test And Verification Plan
 
-- [ ] Domain unit tests: Pure lifecycle state, transition, guard, idempotency,
+### Observed Verification Evidence (2026-09-13)
+
+- Commit under verification: `0c03a98` (`Implement single artifact promotion`).
+- `cargo xtask ci`: passed. This executed formatting, clippy with `-D warnings`, workspace tests, rustdoc, cargo-deny checks, workspace coverage, domain coverage, and release tests.
+- Observed coverage: 92.07% workspace line coverage and 96.49% domain line coverage, exceeding the 85% and 95% thresholds.
+- `cargo machete`: passed; no unused dependencies found.
+- `cargo check --manifest-path fuzz/Cargo.toml`: passed.
+- `cargo fuzz --version`: passed (`cargo-fuzz 0.13.2`).
+- `cargo fuzz run parse_artifact -- -runs=1`: attempted but unavailable on the pinned stable `1.95.0` toolchain because cargo-fuzz requires nightly `-Z` sanitizer options. No code or gate was weakened.
+- .NET and frontend gates: not applicable; this feature is Rust-only.
+
+- [x] Domain unit tests: Pure lifecycle state, transition, guard, idempotency,
       metadata-plan, diagnostic, and error-path tests with visible Arrange / Act
       / Assert sections.
-- [ ] Domain property tests: Deterministic decisions, active same-state
+- [x] Domain property tests: Deterministic decisions, active same-state
       idempotency, and stable diagnostic ordering using the existing `proptest`
       dependency.
-- [ ] Application integration tests: Public promotion orchestration with
+- [x] Application integration tests: Public promotion orchestration with
       in-memory identity, promotion-store, and clock doubles; one discovery,
       preflight-before-write, complete findings, no-op behavior, conflicts, and
       typed operational failures.
-- [ ] Adapter integration tests: Temporary Markdown and Gherkin sources,
+- [x] Adapter integration tests: Temporary Markdown and Gherkin sources,
       format-preserving patches, latest-only metadata, source conflicts,
       atomic replacement, write failures, archive boundaries, and no movement.
-- [ ] Scenario-equivalent acceptance tests: All 13 approved scenario headings
+- [x] Scenario-equivalent acceptance tests: All 13 approved scenario headings
       and every Scenario Outline example in `scenarios.feature`.
-- [ ] Compatibility checks: Existing active-only, identity, relationship,
+- [x] Compatibility checks: Existing active-only, identity, relationship,
       reciprocal, cycle, parser, and report tests continue to pass unchanged.
-- [ ] Rust quality gates: `cargo xtask ci`, including format, clippy, workspace
+- [x] Rust quality gates: `cargo xtask ci`, including format, clippy, workspace
       tests, documentation, dependency audit, workspace coverage at least 85%,
       domain coverage at least 95%, and release tests. Output is recorded during
       verification, not planning.
-- [ ] Additional checks: `cargo machete`, fuzz manifest check, fuzz version,
+- [x] Additional checks: `cargo machete`, fuzz manifest check, fuzz version,
       and available parser fuzz smoke command; record any toolchain limitation.
-- [ ] .NET and frontend gates: Not applicable; this slice changes the Rust
+- [x] .NET and frontend gates: Not applicable; this slice changes the Rust
       workspace and specifications only.
 
 ## Rollout And Recovery
@@ -283,37 +294,37 @@ persistence, network access, and AI judgment.
 
 ## Definition Of Done
 
-- [ ] All ordered tasks are complete with observed RED and GREEN evidence.
-- [ ] Every `REQ-006` functional and quality requirement is covered by a
+- [x] All ordered tasks are complete with observed RED and GREEN evidence.
+- [x] Every `REQ-006` functional and quality requirement is covered by a
       traceable passing test.
-- [ ] All 13 approved scenario headings and every outline example are covered.
-- [ ] All eight recognized artifact types support valid review-entry promotion.
-- [ ] The strict forward transition matrix and guarded supersession behavior are
+- [x] All 13 approved scenario headings and every outline example are covered.
+- [x] All eight recognized artifact types support valid review-entry promotion.
+- [x] The strict forward transition matrix and guarded supersession behavior are
       enforced.
-- [ ] Archived, released, and superseded artifacts cannot be reopened, while
+- [x] Archived, released, and superseded artifacts cannot be reopened, while
       active same-state requests are idempotent no-ops.
-- [ ] Human approval remains an external workflow responsibility and actor
+- [x] Human approval remains an external workflow responsibility and actor
       classification is not performed by promotion.
-- [ ] Verification evidence, archive placement, completion conditions, and
+- [x] Verification evidence, archive placement, completion conditions, and
       supersession prerequisites are enforced before mutation.
-- [ ] Failed requests report all applicable deterministic diagnostics and leave
+- [x] Failed requests report all applicable deterministic diagnostics and leave
       the target and unrelated artifacts unchanged.
-- [ ] Successful transitions record only the latest source, target, actor, and
+- [x] Successful transitions record only the latest source, target, actor, and
       UTC Unix-second timestamp metadata.
-- [ ] Markdown and Gherkin source content outside permitted lifecycle metadata
+- [x] Markdown and Gherkin source content outside permitted lifecycle metadata
       remains unchanged.
-- [ ] Source conflicts are detected and cannot overwrite concurrent changes.
-- [ ] Filesystem replacement is atomic and promotion never moves files.
-- [ ] Promotion is offline, requires no AI service, and adds no persistence,
+- [x] Source conflicts are detected and cannot overwrite concurrent changes.
+- [x] Filesystem replacement is atomic and promotion never moves files.
+- [x] Promotion is offline, requires no AI service, and adds no persistence,
       release-record, CLI, or serialization behavior.
-- [ ] Existing active, identity, target, reciprocal, cycle, parser, and report
+- [x] Existing active, identity, target, reciprocal, cycle, parser, and report
       behavior remains compatible.
-- [ ] No new crate, workspace member, dependency, architectural layer, unsafe
+- [x] No new crate, workspace member, dependency, architectural layer, unsafe
       code, lint suppression, or constitutional deviation was introduced.
-- [ ] Domain purity, dependency direction, constructor injection, typed errors,
+- [x] Domain purity, dependency direction, constructor injection, typed errors,
       public documentation, and coverage thresholds pass review.
-- [ ] `cargo xtask ci`, coverage thresholds, dependency audit, release tests,
+- [x] `cargo xtask ci`, coverage thresholds, dependency audit, release tests,
       unused-dependency analysis, and fuzz checks have observed evidence recorded
       in this document during verification.
-- [ ] Relevant specifications and ADR links remain current in the implementation
+- [x] Relevant specifications and ADR links remain current in the implementation
       change set.
