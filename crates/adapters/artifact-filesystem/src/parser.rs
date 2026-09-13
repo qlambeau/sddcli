@@ -5,8 +5,8 @@ use serde_yaml::Value;
 
 use domain::{
     ArtifactKind, ArtifactPath, ArtifactSnapshot, ChecklistItem, Diagnostic, DocumentSnapshot,
-    FeatureSnapshot, Heading, Location, Metadata, MetadataValue, ScenarioCoverage, Severity,
-    SourceLine,
+    FeatureSnapshot, Heading, Location, Metadata, MetadataValue, ReleaseFeature, ReleaseSnapshot,
+    ScenarioCoverage, Severity, SourceLine,
 };
 
 const FRONTMATTER_SEPARATOR: &str = "---";
@@ -23,7 +23,7 @@ pub fn parse_artifact(path: ArtifactPath, kind: ArtifactKind, contents: &str) ->
     let document = if kind == ArtifactKind::Gherkin {
         parse_gherkin(&path, contents, lines, &mut diagnostics)
     } else {
-        parse_markdown(contents, lines)
+        parse_markdown(&path, contents, &lines, kind, &metadata, &mut diagnostics)
     };
     ArtifactSnapshot::new(path, kind, metadata, document).with_parser_diagnostics(diagnostics)
 }
@@ -138,11 +138,129 @@ fn normalized_value(value: Value) -> MetadataValue {
     }
 }
 
-fn parse_markdown(contents: &str, lines: Vec<SourceLine>) -> DocumentSnapshot {
+fn parse_markdown(
+    path: &ArtifactPath,
+    contents: &str,
+    lines: &[SourceLine],
+    kind: ArtifactKind,
+    metadata: &Metadata,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> DocumentSnapshot {
     let headings = lines.iter().filter_map(parse_heading).collect::<Vec<_>>();
     let checklist_items = lines.iter().filter_map(parse_checklist).collect::<Vec<_>>();
     let _ = Parser::new(contents).count();
-    DocumentSnapshot::new(lines, headings, checklist_items, None)
+    let document = DocumentSnapshot::new(lines.to_owned(), headings, checklist_items, None);
+    if kind == ArtifactKind::Release {
+        return document.with_release(parse_release(path, lines, metadata, diagnostics));
+    }
+    document
+}
+
+fn parse_release(
+    path: &ArtifactPath,
+    lines: &[SourceLine],
+    metadata: &Metadata,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> ReleaseSnapshot {
+    let features = parse_release_features(path, lines, diagnostics);
+    let has_verification_evidence = has_verification_evidence(lines);
+    let has_release_commit = has_release_commit(metadata);
+    ReleaseSnapshot::new(features, has_verification_evidence, has_release_commit)
+}
+
+fn parse_release_features(
+    path: &ArtifactPath,
+    lines: &[SourceLine],
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Vec<ReleaseFeature> {
+    let mut in_feature_table = false;
+    let mut features = Vec::new();
+    for line in lines {
+        if let Some(heading) = parse_heading(line) {
+            in_feature_table = heading.text().eq_ignore_ascii_case("included features");
+        }
+        if !in_feature_table {
+            continue;
+        }
+        let trimmed = line.text().trim();
+        if !trimmed.starts_with('|') {
+            continue;
+        }
+        let cells = trimmed.trim_matches('|').split('|').map(str::trim).collect::<Vec<_>>();
+        let Some(first) = cells.first() else { continue };
+        if first.eq_ignore_ascii_case("feature id") || is_separator_row(&cells) {
+            continue;
+        }
+        if let Some(feature) = parse_release_feature_row(path, line, &cells, diagnostics) {
+            features.push(feature);
+        }
+    }
+    features
+}
+
+fn parse_release_feature_row(
+    path: &ArtifactPath,
+    line: &SourceLine,
+    cells: &[&str],
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Option<ReleaseFeature> {
+    let story_id = cells.get(2).copied().unwrap_or_default().trim_matches('`');
+    let status = cells.get(3).copied().unwrap_or_default().trim_matches('`');
+    if cells.len() < 4 || !valid_story_id(story_id) || status.is_empty() {
+        diagnostics.push(parser_diagnostic(
+            path,
+            ArtifactKind::Release,
+            "RELEASE_FEATURE_ROW",
+            Some(Location::new(line.line(), None)),
+            "included features contains a malformed feature row",
+            "record a US-NNN user story and lifecycle status in every feature row",
+        ));
+        return None;
+    }
+    Some(ReleaseFeature::new(story_id, status))
+}
+
+fn is_separator_row(cells: &[&str]) -> bool {
+    !cells.is_empty()
+        && cells
+            .iter()
+            .all(|cell| cell.chars().all(|character| character == '-' || character == ' '))
+}
+
+fn has_verification_evidence(lines: &[SourceLine]) -> bool {
+    let Some((index, level)) = lines.iter().enumerate().find_map(|(index, line)| {
+        let heading = parse_heading(line)?;
+        heading
+            .text()
+            .eq_ignore_ascii_case("verification evidence")
+            .then_some((index, heading.level()))
+    }) else {
+        return false;
+    };
+    lines
+        .iter()
+        .skip(index + 1)
+        .take_while(|line| parse_heading(line).is_none_or(|heading| heading.level() > level))
+        .any(|line| {
+            let trimmed = line.text().trim();
+            let value = trimmed.strip_prefix('-').map(str::trim).unwrap_or_default();
+            !value.is_empty() && !value.to_ascii_lowercase().contains("tbd")
+        })
+}
+
+fn has_release_commit(metadata: &Metadata) -> bool {
+    match metadata.get("commit") {
+        Some(MetadataValue::Scalar(value)) => {
+            let value = value.trim();
+            !value.is_empty() && value != "<git-hash>" && !value.eq_ignore_ascii_case("TBD")
+        }
+        _ => false,
+    }
+}
+
+fn valid_story_id(value: &str) -> bool {
+    let Some(number) = value.strip_prefix("US-") else { return false };
+    number.len() == 3 && number.bytes().all(|byte| byte.is_ascii_digit())
 }
 
 fn parse_gherkin(

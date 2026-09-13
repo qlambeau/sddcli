@@ -1,8 +1,8 @@
 use domain::{
     ArtifactPath, Diagnostic, LifecycleState, MetadataValue, PromotionActor, PromotionDecision,
-    PromotionFacts, PromotionPlan, PromotionRequest, PromotionTimestamp, decide_promotion,
-    validate_artifact, validate_reciprocal_relationships, validate_relationship_cycles,
-    validate_relationships,
+    PromotionFacts, PromotionPlan, PromotionRequest, PromotionTimestamp, completion_facts,
+    decide_promotion, validate_artifact, validate_reciprocal_relationships,
+    validate_relationship_cycles, validate_relationships,
 };
 
 use crate::{ArtifactIdentitySource, ArtifactPromotionStore, Clock, PromotionError};
@@ -161,6 +161,7 @@ fn facts_for(
     let blockers = blockers(snapshot);
     let archive_location = snapshot.path().as_str().starts_with("specs/archive/");
     let checks_pass = validation_diagnostics.is_empty();
+    let completion = completion_facts(snapshot, snapshots, command.target);
 
     PromotionFacts::passing()
         .with_review_entry_checks(checks_pass)
@@ -173,6 +174,7 @@ fn facts_for(
         .with_blockers(blockers)
         .with_validation_diagnostics(validation_diagnostics)
         .with_relationship_diagnostics(relationship_diagnostics)
+        .conjoined_with(&completion)
 }
 
 fn blockers(snapshot: &domain::ArtifactSnapshot) -> Vec<String> {

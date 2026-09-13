@@ -86,6 +86,7 @@ fn path_encoded_id(kind: ArtifactKind, path: &ArtifactPath) -> Option<ArtifactId
             | ArtifactKind::Adr
             | ArtifactKind::Database
             | ArtifactKind::Table
+            | ArtifactKind::Release
     ) {
         return None;
     }

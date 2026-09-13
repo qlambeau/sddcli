@@ -182,6 +182,7 @@ fn kind_label(kind: ArtifactKind) -> String {
         ArtifactKind::Database => "database",
         ArtifactKind::Table => "table",
         ArtifactKind::Task => "task",
+        ArtifactKind::Release => "release record",
     };
     format!("{} ({display})", token.to_ascii_uppercase())
 }

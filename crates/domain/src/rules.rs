@@ -232,7 +232,9 @@ fn validate_references(
 
 fn expected_reference_prefixes(kind: ArtifactKind) -> &'static [(&'static str, &'static str)] {
     match kind {
-        ArtifactKind::Prd | ArtifactKind::Adr | ArtifactKind::Gherkin => &[],
+        ArtifactKind::Prd | ArtifactKind::Adr | ArtifactKind::Gherkin | ArtifactKind::Release => {
+            &[]
+        }
         ArtifactKind::Epic => &[("parent", "PRD")],
         ArtifactKind::UserStory => &[("parent", "PRD"), ("epic", "EPIC")],
         ArtifactKind::Requirements | ArtifactKind::Design | ArtifactKind::Task => {
@@ -508,6 +510,9 @@ fn required_fields(kind: ArtifactKind) -> &'static [&'static str] {
             "table_type",
             "related",
         ],
+        ArtifactKind::Release => {
+            &["id", "title", "type", "status", "version", "commit", "date", "owner", "related"]
+        }
     }
 }
 
@@ -595,6 +600,13 @@ fn required_headings(kind: ArtifactKind) -> &'static [&'static str] {
             "column specifications",
             "indexes & constraints",
             "invariants & validation rules",
+        ],
+        ArtifactKind::Release => &[
+            "release record",
+            "release overview",
+            "included features",
+            "verification evidence",
+            "migration & rollback",
         ],
         ArtifactKind::Gherkin => &[],
     }
@@ -771,6 +783,7 @@ mod tests {
             ArtifactKind::Database => "specs/schema/DB-001.md".to_string(),
             ArtifactKind::Table => "specs/schema/TABLE-001.md".to_string(),
             ArtifactKind::Task => "specs/feature/tasks.md".to_string(),
+            ArtifactKind::Release => "specs/releases/REL-001.md".to_string(),
         }
     }
 
@@ -888,6 +901,7 @@ mod tests {
                 ArtifactKind::Database,
                 ArtifactKind::Table,
                 ArtifactKind::Task,
+                ArtifactKind::Release,
             ]
         );
     }

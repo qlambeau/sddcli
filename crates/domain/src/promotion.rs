@@ -18,6 +18,8 @@ pub enum LifecycleState {
     Archived,
     /// The artifact has been replaced by an approved successor.
     Superseded,
+    /// The release record has been verified and closed.
+    Released,
 }
 
 impl LifecycleState {
@@ -31,6 +33,7 @@ impl LifecycleState {
             "implemented" => Some(Self::Implemented),
             "archived" => Some(Self::Archived),
             "superseded" => Some(Self::Superseded),
+            "released" => Some(Self::Released),
             _ => None,
         }
     }
@@ -45,6 +48,7 @@ impl LifecycleState {
             Self::Implemented => "implemented",
             Self::Archived => "archived",
             Self::Superseded => "superseded",
+            Self::Released => "released",
         }
     }
 
@@ -370,7 +374,20 @@ pub fn decide_promotion(
     }
 
     let mut diagnostics = Vec::new();
-    if matches!(source, LifecycleState::Archived | LifecycleState::Superseded) {
+    if request.target() == LifecycleState::Released
+        && snapshot.kind() != crate::ArtifactKind::Release
+    {
+        diagnostics.push(diagnostic(
+            snapshot.path(),
+            "RELEASE_KIND",
+            "only a release record can become released",
+            "target a canonical REL-NNN release record for release promotion",
+        ));
+    }
+    if matches!(
+        source,
+        LifecycleState::Archived | LifecycleState::Superseded | LifecycleState::Released
+    ) {
         diagnostics.push(diagnostic(
             snapshot.path(),
             "TERMINAL_STATE",
@@ -418,6 +435,156 @@ pub fn decide_promotion(
     ))
 }
 
+/// Derives completion prerequisites from an immutable repository snapshot.
+#[must_use]
+pub fn completion_facts(
+    snapshot: &ArtifactSnapshot,
+    snapshots: &[ArtifactSnapshot],
+    target: LifecycleState,
+) -> PromotionFacts {
+    let mut facts = PromotionFacts::passing();
+    let mut diagnostics = Vec::new();
+    match target {
+        LifecycleState::Superseded => {
+            supersession_facts(snapshot, snapshots, &mut facts, &mut diagnostics);
+        }
+        LifecycleState::Released => release_facts(snapshot, &mut facts, &mut diagnostics),
+        LifecycleState::Draft
+        | LifecycleState::InReview
+        | LifecycleState::Approved
+        | LifecycleState::Implemented
+        | LifecycleState::Archived => {}
+    }
+    let supersession_valid = facts.approved_successor_with_valid_links;
+    let release_valid = facts.closed_release_conditions_satisfied;
+    facts
+        .with_supersession(supersession_valid)
+        .with_closed_release_conditions(release_valid)
+        .with_validation_diagnostics(diagnostics)
+}
+
+fn supersession_facts(
+    snapshot: &ArtifactSnapshot,
+    snapshots: &[ArtifactSnapshot],
+    facts: &mut PromotionFacts,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let Some(value) = snapshot.metadata().get("superseded_by") else {
+        facts.approved_successor_with_valid_links = false;
+        diagnostics.push(diagnostic(
+            snapshot.path(),
+            "SUPERSESSION_SUCCESSOR_MISSING",
+            "approved successor is missing",
+            "set `superseded_by` to an approved successor identifier",
+        ));
+        return;
+    };
+    let MetadataValue::Scalar(successor_id) = value else {
+        facts.approved_successor_with_valid_links = false;
+        diagnostics.push(diagnostic(
+            snapshot.path(),
+            "SUPERSESSION_SUCCESSOR_MISSING",
+            "approved successor identifier is not a scalar value",
+            "set `superseded_by` to one artifact identifier",
+        ));
+        return;
+    };
+    let successor = snapshots.iter().find(|candidate| {
+        candidate.kind() == snapshot.kind()
+            && candidate.id().is_some_and(|id| id.as_str() == successor_id)
+    });
+    let Some(successor) = successor else {
+        facts.approved_successor_with_valid_links = false;
+        diagnostics.push(diagnostic(
+            snapshot.path(),
+            "SUPERSESSION_SUCCESSOR_MISSING",
+            format!("approved successor `{successor_id}` was not found"),
+            "add the approved successor to repository discovery",
+        ));
+        return;
+    };
+    if state_of(successor) != Some(LifecycleState::Approved) {
+        facts.approved_successor_with_valid_links = false;
+        diagnostics.push(diagnostic(
+            snapshot.path(),
+            "SUPERSESSION_SUCCESSOR_STATE",
+            format!("successor `{successor_id}` is not approved"),
+            "promote the successor to approved before supersession",
+        ));
+    }
+    let reciprocal = successor.metadata().get("supersedes").is_some_and(|value| {
+        matches!(value, MetadataValue::Scalar(value) if value == snapshot.id().map_or("", |id| id.as_str()))
+    });
+    if !reciprocal {
+        facts.approved_successor_with_valid_links = false;
+        diagnostics.push(diagnostic(
+            snapshot.path(),
+            "SUPERSESSION_LINKS",
+            "predecessor and successor supersession links are not reciprocal",
+            "set successor `supersedes` to the predecessor identifier",
+        ));
+    }
+}
+
+fn release_facts(
+    snapshot: &ArtifactSnapshot,
+    facts: &mut PromotionFacts,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    if snapshot.kind() != crate::ArtifactKind::Release {
+        facts.closed_release_conditions_satisfied = false;
+        return;
+    }
+    let Some(release) = snapshot.document().release() else {
+        facts.closed_release_conditions_satisfied = false;
+        diagnostics.push(diagnostic(
+            snapshot.path(),
+            "RELEASE_STRUCTURE",
+            "release record content is not normalized",
+            "provide a valid included-features table and evidence section",
+        ));
+        return;
+    };
+    if release.features().is_empty() {
+        facts.closed_release_conditions_satisfied = false;
+        diagnostics.push(diagnostic(
+            snapshot.path(),
+            "RELEASE_FEATURES",
+            "release record includes no features",
+            "include every released feature in the release record",
+        ));
+    }
+    for feature in release.features() {
+        if !matches!(feature.status(), "implemented" | "archived") {
+            facts.closed_release_conditions_satisfied = false;
+            diagnostics.push(diagnostic(
+                snapshot.path(),
+                "RELEASE_FEATURE_STATE",
+                format!("included feature `{}` is `{}`", feature.story_id(), feature.status()),
+                "complete every included feature before releasing the record",
+            ));
+        }
+    }
+    if !release.has_verification_evidence() {
+        facts.closed_release_conditions_satisfied = false;
+        diagnostics.push(diagnostic(
+            snapshot.path(),
+            "RELEASE_VERIFICATION",
+            "release verification evidence is missing",
+            "record observed verification evidence in the release record",
+        ));
+    }
+    if !release.has_release_commit() {
+        facts.closed_release_conditions_satisfied = false;
+        diagnostics.push(diagnostic(
+            snapshot.path(),
+            "RELEASE_COMMIT",
+            "release commit is missing",
+            "record the commit that closes the release milestone",
+        ));
+    }
+}
+
 /// Returns the normalized lifecycle state of an artifact snapshot.
 #[must_use]
 pub fn state_of(snapshot: &ArtifactSnapshot) -> Option<LifecycleState> {
@@ -435,7 +602,10 @@ fn is_allowed_transition(source: LifecycleState, target: LifecycleState) -> bool
         (source, target),
         (LifecycleState::Draft, LifecycleState::InReview)
             | (LifecycleState::InReview, LifecycleState::Approved)
-            | (LifecycleState::Approved, LifecycleState::Implemented | LifecycleState::Superseded)
+            | (
+                LifecycleState::Approved,
+                LifecycleState::Implemented | LifecycleState::Superseded | LifecycleState::Released
+            )
             | (LifecycleState::Implemented, LifecycleState::Archived)
     )
 }
@@ -507,10 +677,19 @@ fn add_target_guards(
                 "approve a successor and set reciprocal supersession links",
             ));
         }
+        LifecycleState::Released if !facts.closed_release_conditions_satisfied => {
+            diagnostics.push(diagnostic(
+                path,
+                "RELEASE_CONDITIONS",
+                "release closure conditions are not satisfied",
+                "complete every included feature and record verification evidence and a release commit",
+            ));
+        }
         LifecycleState::Draft
         | LifecycleState::InReview
         | LifecycleState::Implemented
-        | LifecycleState::Superseded => {}
+        | LifecycleState::Superseded
+        | LifecycleState::Released => {}
     }
 }
 
@@ -536,7 +715,7 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
-    use crate::{ArtifactKind, DocumentSnapshot, Metadata};
+    use crate::{ArtifactKind, DocumentSnapshot, Metadata, ReleaseFeature, ReleaseSnapshot};
 
     fn actor() -> PromotionActor {
         match PromotionActor::try_new("agent-1") {
@@ -576,6 +755,33 @@ mod tests {
         assert_eq!(plan.target(), target);
         assert_eq!(plan.actor().as_str(), "agent-1");
         assert_eq!(plan.promoted_at().as_unix_seconds(), 42);
+    }
+
+    /// Covers: REQ-006 prerequisite composition — independent facts are conjoined conservatively.
+    #[test]
+    fn conjoins_all_prerequisite_facts_and_diagnostics() {
+        let left = PromotionFacts::passing()
+            .with_review_entry_checks(false)
+            .with_implementation_evidence(false)
+            .with_blockers(vec!["OBS-001".to_string()]);
+        let right = PromotionFacts::passing()
+            .with_approval_checks(false)
+            .with_human_approval_confirmed(false)
+            .with_archive_location(false)
+            .with_closed_release_conditions(false)
+            .with_supersession(false)
+            .with_blockers(vec!["OBS-002".to_string()]);
+        let combined = left.conjoined_with(&right);
+        let expected = PromotionFacts::passing()
+            .with_review_entry_checks(false)
+            .with_approval_checks(false)
+            .with_human_approval_confirmed(false)
+            .with_implementation_evidence(false)
+            .with_archive_location(false)
+            .with_closed_release_conditions(false)
+            .with_supersession(false)
+            .with_blockers(vec!["OBS-001".to_string(), "OBS-002".to_string()]);
+        assert_eq!(combined, expected);
     }
 
     /// Covers: REQ-006 FR-004 — active same-state requests are idempotent no-ops.
@@ -669,13 +875,100 @@ mod tests {
         assert_eq!(state_of(&artifact), Some(LifecycleState::Draft));
     }
 
+    /// Covers: REQ-009 FR-005 — only release records can become released.
+    #[test]
+    fn rejects_non_release_release_promotion() {
+        let request = PromotionRequest::new(LifecycleState::Released, actor());
+        let decision = decide_promotion(
+            &snapshot("approved"),
+            &PromotionFacts::passing().with_closed_release_conditions(false),
+            &request,
+            PromotionTimestamp::from_unix_seconds(42),
+        );
+        assert!(
+            matches!(decision, PromotionDecision::Rejected(diagnostics) if diagnostics.iter().any(|item| item.rule_id().as_str().ends_with("RELEASE_KIND")) && diagnostics.iter().any(|item| item.rule_id().as_str().ends_with("RELEASE_CONDITIONS")))
+        );
+    }
+
+    /// Covers: REQ-009 FR-005 — release evidence, features, and commit are all required.
+    #[test]
+    fn rejects_release_without_features_evidence_or_commit() {
+        let Ok(path) = ArtifactPath::try_new("specs/releases/REL-001.md") else {
+            std::process::abort()
+        };
+        let mut metadata = Metadata::new();
+        metadata.insert_scalar("status", "approved");
+        let release = ArtifactSnapshot::new(
+            path,
+            ArtifactKind::Release,
+            metadata,
+            DocumentSnapshot::empty().with_release(ReleaseSnapshot::new(Vec::new(), false, false)),
+        );
+        let decision = decide_promotion(
+            &release,
+            &completion_facts(&release, std::slice::from_ref(&release), LifecycleState::Released),
+            &PromotionRequest::new(LifecycleState::Released, actor()),
+            PromotionTimestamp::from_unix_seconds(42),
+        );
+        assert!(
+            matches!(decision, PromotionDecision::Rejected(diagnostics) if diagnostics.iter().any(|item| item.rule_id().as_str().ends_with("RELEASE_FEATURES")) && diagnostics.iter().any(|item| item.rule_id().as_str().ends_with("RELEASE_VERIFICATION")) && diagnostics.iter().any(|item| item.rule_id().as_str().ends_with("RELEASE_COMMIT")))
+        );
+    }
+
+    /// Covers: REQ-009 FR-005 — invalid feature state and unnormalized content are rejected.
+    #[test]
+    fn rejects_invalid_release_feature_and_structure() {
+        let Ok(path) = ArtifactPath::try_new("specs/releases/REL-001.md") else {
+            std::process::abort()
+        };
+        let mut metadata = Metadata::new();
+        metadata.insert_scalar("status", "approved");
+        let release = ArtifactSnapshot::new(
+            path,
+            ArtifactKind::Release,
+            metadata,
+            DocumentSnapshot::empty().with_release(ReleaseSnapshot::new(
+                vec![ReleaseFeature::new("US-001", "approved")],
+                true,
+                true,
+            )),
+        );
+        let facts =
+            completion_facts(&release, std::slice::from_ref(&release), LifecycleState::Released);
+        assert!(
+            facts
+                .validation_diagnostics
+                .iter()
+                .any(|item| item.rule_id().as_str().ends_with("RELEASE_FEATURE_STATE"))
+        );
+
+        let no_structure = ArtifactSnapshot::new(
+            ArtifactPath::try_new("specs/releases/REL-002.md")
+                .unwrap_or_else(|_| std::process::abort()),
+            ArtifactKind::Release,
+            Metadata::new(),
+            DocumentSnapshot::empty(),
+        );
+        let facts = completion_facts(
+            &no_structure,
+            std::slice::from_ref(&no_structure),
+            LifecycleState::Released,
+        );
+        assert!(
+            facts
+                .validation_diagnostics
+                .iter()
+                .any(|item| item.rule_id().as_str().ends_with("RELEASE_STRUCTURE"))
+        );
+    }
+
     /// Covers: REQ-006 FR-011 — missing or unsupported state is diagnostic rather than mutation.
     #[test]
     fn rejects_artifact_without_supported_lifecycle_state() {
         let request = PromotionRequest::new(LifecycleState::InReview, actor());
 
         let decision = decide_promotion(
-            &snapshot("released"),
+            &snapshot("unknown"),
             &PromotionFacts::passing(),
             &request,
             PromotionTimestamp::from_unix_seconds(42),
@@ -687,9 +980,32 @@ mod tests {
                 .iter()
                 .any(|diagnostic| diagnostic.rule_id().as_str().ends_with("STATE_MISSING"))
         );
-        assert_eq!(LifecycleState::parse("released"), None);
+        assert_eq!(LifecycleState::parse("released"), Some(LifecycleState::Released));
         assert_eq!(PromotionActorError::Empty.to_string(), "promotion actor is empty");
         assert!(PromotionActor::try_new(" ").is_err());
+    }
+
+    /// Covers: REQ-009 FR-003 — a scalar successor identifier must resolve to a same-kind artifact.
+    #[test]
+    fn rejects_unresolved_scalar_supersession_successor() {
+        let Ok(path) = ArtifactPath::try_new("specs/adr/ADR-001.md") else { std::process::abort() };
+        let mut metadata = Metadata::new();
+        metadata.insert_scalar("id", "ADR-001");
+        metadata.insert_scalar("status", "approved");
+        metadata.insert_scalar("superseded_by", "ADR-002");
+        let predecessor =
+            ArtifactSnapshot::new(path, ArtifactKind::Adr, metadata, DocumentSnapshot::empty());
+        let facts = completion_facts(
+            &predecessor,
+            std::slice::from_ref(&predecessor),
+            LifecycleState::Superseded,
+        );
+        assert!(
+            facts
+                .validation_diagnostics
+                .iter()
+                .any(|item| item.rule_id().as_str().ends_with("SUPERSESSION_SUCCESSOR_MISSING"))
+        );
     }
 
     /// Covers: REQ-006 FR-007, FR-009, and FR-013 — all applicable failures are ordered.

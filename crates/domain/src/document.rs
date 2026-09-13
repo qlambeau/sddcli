@@ -260,6 +260,71 @@ impl FeatureSnapshot {
     }
 }
 
+/// Identifies one feature row recorded in a release record.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ReleaseFeature {
+    story_id: String,
+    status: String,
+}
+
+impl ReleaseFeature {
+    /// Creates a normalized included-feature row.
+    #[must_use]
+    pub fn new(story_id: impl Into<String>, status: impl Into<String>) -> Self {
+        Self { story_id: story_id.into(), status: status.into() }
+    }
+
+    /// Returns the included user-story identifier.
+    #[must_use]
+    pub fn story_id(&self) -> &str {
+        &self.story_id
+    }
+
+    /// Returns the recorded feature lifecycle status.
+    #[must_use]
+    pub fn status(&self) -> &str {
+        &self.status
+    }
+}
+
+/// Structure extracted from a release record.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ReleaseSnapshot {
+    features: Vec<ReleaseFeature>,
+    has_verification_evidence: bool,
+    has_release_commit: bool,
+}
+
+impl ReleaseSnapshot {
+    /// Creates normalized release-record evidence.
+    #[must_use]
+    pub fn new(
+        features: Vec<ReleaseFeature>,
+        has_verification_evidence: bool,
+        has_release_commit: bool,
+    ) -> Self {
+        Self { features, has_verification_evidence, has_release_commit }
+    }
+
+    /// Returns included features in source order.
+    #[must_use]
+    pub fn features(&self) -> &[ReleaseFeature] {
+        &self.features
+    }
+
+    /// Returns whether verification evidence is present.
+    #[must_use]
+    pub const fn has_verification_evidence(&self) -> bool {
+        self.has_verification_evidence
+    }
+
+    /// Returns whether a concrete release commit is present.
+    #[must_use]
+    pub const fn has_release_commit(&self) -> bool {
+        self.has_release_commit
+    }
+}
+
 /// Structure extracted from a Markdown or Gherkin artifact.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct DocumentSnapshot {
@@ -267,6 +332,7 @@ pub struct DocumentSnapshot {
     headings: Vec<Heading>,
     checklist_items: Vec<ChecklistItem>,
     feature: Option<FeatureSnapshot>,
+    release: Option<ReleaseSnapshot>,
 }
 
 impl DocumentSnapshot {
@@ -278,7 +344,14 @@ impl DocumentSnapshot {
         checklist_items: Vec<ChecklistItem>,
         feature: Option<FeatureSnapshot>,
     ) -> Self {
-        Self { lines, headings, checklist_items, feature }
+        Self { lines, headings, checklist_items, feature, release: None }
+    }
+
+    /// Attaches normalized release-record data.
+    #[must_use]
+    pub fn with_release(mut self, release: ReleaseSnapshot) -> Self {
+        self.release = Some(release);
+        self
     }
 
     /// Returns an empty document snapshot.
@@ -309,6 +382,12 @@ impl DocumentSnapshot {
     #[must_use]
     pub fn feature(&self) -> Option<&FeatureSnapshot> {
         self.feature.as_ref()
+    }
+
+    /// Returns normalized release-record data, when this is a release record.
+    #[must_use]
+    pub fn release(&self) -> Option<&ReleaseSnapshot> {
+        self.release.as_ref()
     }
 }
 

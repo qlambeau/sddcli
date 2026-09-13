@@ -2,10 +2,11 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 
+use crate::artifact::valid_archive_directory;
 use crate::{
     ArtifactId, ArtifactKind, ArtifactPath, ArtifactSnapshot, Diagnostic, LifecycleState,
     MetadataValue, PromotionActor, PromotionFacts, PromotionPlan, PromotionRequest,
-    PromotionTimestamp, Severity, decide_promotion, state_of,
+    PromotionTimestamp, Severity, completion_facts, decide_promotion, state_of, validate_artifact,
 };
 
 /// Identifies one implementation packet by its repository-relative directory.
@@ -35,8 +36,12 @@ impl ImplementationPacketRef {
                     .is_some_and(|number| number.iter().all(u8::is_ascii_digit))
                 && !value.contains('/')
         });
-        let is_specs_directory =
-            is_numbered_packet_directory && ArtifactKind::from_path(path.as_str()).is_none();
+        let is_archived_packet_directory = path
+            .as_str()
+            .strip_prefix("specs/archive/")
+            .is_some_and(|value| !value.contains('/') && valid_archive_directory(value));
+        let is_specs_directory = (is_numbered_packet_directory || is_archived_packet_directory)
+            && ArtifactKind::from_path(path.as_str()).is_none();
         if !is_specs_directory {
             return Err(PacketReferenceError::Invalid(
                 "implementation packet must be a repository-relative directory below specs/"
@@ -198,9 +203,10 @@ fn missing_target_facts(target: LifecycleState) -> PromotionFacts {
         LifecycleState::Archived => PromotionFacts::passing()
             .with_archive_location(false)
             .with_closed_release_conditions(false),
-        LifecycleState::Draft | LifecycleState::InReview | LifecycleState::Superseded => {
-            PromotionFacts::passing()
-        }
+        LifecycleState::Draft
+        | LifecycleState::InReview
+        | LifecycleState::Superseded
+        | LifecycleState::Released => PromotionFacts::passing(),
     }
 }
 
@@ -308,6 +314,163 @@ pub fn plan_packet_promotion(
     PacketPromotionDecision::Accepted(PacketPromotionPlan::new(advanced, skipped))
 }
 
+/// Plans archival of one relocated feature packet without moving files.
+#[must_use]
+pub fn plan_packet_archival(
+    packet: &ImplementationPacketRef,
+    snapshots: &[ArtifactSnapshot],
+    release_records: &[ArtifactSnapshot],
+    actor: &PromotionActor,
+    promoted_at: PromotionTimestamp,
+) -> PacketPromotionDecision {
+    let archive_location = packet.path().as_str().starts_with("specs/archive/");
+    let by_path = snapshots
+        .iter()
+        .map(|snapshot| (snapshot.path().clone(), snapshot))
+        .collect::<BTreeMap<_, _>>();
+    let colocated_paths = packet.colocated_paths();
+    let story_id = packet_story_id(&colocated_paths, &by_path);
+    let release_ok = released_record_matches(story_id.as_deref(), release_records);
+    let mut diagnostics = archival_prerequisite_diagnostics(packet, archive_location, release_ok);
+    let (mut advanced, mut participant_diagnostics) = archival_participant_plans(
+        &colocated_paths,
+        &by_path,
+        snapshots,
+        archive_location,
+        release_ok,
+        actor,
+        promoted_at,
+    );
+    diagnostics.append(&mut participant_diagnostics);
+
+    if !diagnostics.is_empty() {
+        diagnostics.sort_by(|left, right| {
+            left.rule_id()
+                .cmp(right.rule_id())
+                .then_with(|| left.path().cmp(right.path()))
+                .then_with(|| left.message().cmp(right.message()))
+        });
+        return PacketPromotionDecision::Rejected(diagnostics);
+    }
+    advanced.sort_by(|left, right| left.path().cmp(right.path()));
+    PacketPromotionDecision::Accepted(PacketPromotionPlan::new(advanced, Vec::new()))
+}
+
+fn packet_story_id(
+    paths: &[ArtifactPath],
+    by_path: &BTreeMap<ArtifactPath, &ArtifactSnapshot>,
+) -> Option<String> {
+    paths
+        .iter()
+        .find_map(|path| {
+            by_path.get(path).and_then(|snapshot| {
+                (snapshot.kind() == ArtifactKind::UserStory)
+                    .then(|| snapshot.id().map(|id| id.as_str().to_owned()))
+            })
+        })
+        .flatten()
+}
+
+fn released_record_matches(story_id: Option<&str>, release_records: &[ArtifactSnapshot]) -> bool {
+    story_id.is_some_and(|story_id| {
+        release_records.iter().any(|release| {
+            state_of(release) == Some(LifecycleState::Released)
+                && validate_artifact(release).is_empty()
+                && release.document().release().is_some_and(|record| {
+                    record.features().iter().any(|feature| {
+                        feature.story_id() == story_id
+                            && matches!(feature.status(), "implemented" | "archived")
+                    })
+                })
+        })
+    })
+}
+
+fn archival_prerequisite_diagnostics(
+    packet: &ImplementationPacketRef,
+    archive_location: bool,
+    release_ok: bool,
+) -> Vec<Diagnostic> {
+    let mut diagnostics = Vec::new();
+    if !archive_location {
+        diagnostics.push(Diagnostic::new(
+            packet.path().clone(),
+            None,
+            "ARTIFACT.PACKET.ARCHIVE_LOCATION",
+            Severity::Error,
+            "implementation packet is not in the canonical archive location",
+            "relocate the packet through the release workflow before archival promotion",
+        ));
+    }
+    if !release_ok {
+        diagnostics.push(Diagnostic::new(
+            packet.path().clone(),
+            None,
+            "ARTIFACT.PACKET.RELEASE_PREREQUISITE",
+            Severity::Error,
+            "a validated released record for the packet feature is missing",
+            "release the corresponding record before archiving the packet",
+        ));
+    }
+    diagnostics
+}
+
+fn archival_participant_plans(
+    paths: &[ArtifactPath],
+    by_path: &BTreeMap<ArtifactPath, &ArtifactSnapshot>,
+    snapshots: &[ArtifactSnapshot],
+    archive_location: bool,
+    release_ok: bool,
+    actor: &PromotionActor,
+    promoted_at: PromotionTimestamp,
+) -> (Vec<PromotionPlan>, Vec<Diagnostic>) {
+    let mut advanced = Vec::new();
+    let mut diagnostics = Vec::new();
+    for path in paths {
+        let Some(snapshot) = by_path.get(path) else {
+            diagnostics.push(Diagnostic::new(
+                path.clone(),
+                None,
+                "ARTIFACT.PACKET.ARTIFACT_MISSING",
+                Severity::Error,
+                "relocated packet artifact is missing",
+                "retain all five colocated packet artifacts before archival promotion",
+            ));
+            continue;
+        };
+        let Some(source) = state_of(snapshot) else {
+            diagnostics.push(packet_diagnostic(
+                snapshot,
+                "STATE_MISSING",
+                "artifact lifecycle state is missing or unsupported",
+                "set the packet artifact to implemented before archival promotion",
+            ));
+            continue;
+        };
+        if source != LifecycleState::Implemented {
+            diagnostics.push(packet_diagnostic(
+                snapshot,
+                "ARCHIVE_STATE",
+                format!("packet artifact is `{}` instead of `implemented`", source.as_str()),
+                "implement every packet artifact before archival promotion",
+            ));
+            continue;
+        }
+        let facts = completion_facts(snapshot, snapshots, LifecycleState::Archived)
+            .with_archive_location(archive_location)
+            .with_closed_release_conditions(release_ok)
+            .with_validation_diagnostics(validate_artifact(snapshot))
+            .with_relationship_diagnostics(Vec::new());
+        let request = PromotionRequest::new(LifecycleState::Archived, actor.clone());
+        match decide_promotion(snapshot, &facts, &request, promoted_at) {
+            crate::PromotionDecision::Accepted(plan) => advanced.push(plan),
+            crate::PromotionDecision::Idempotent => {}
+            crate::PromotionDecision::Rejected(mut findings) => diagnostics.append(&mut findings),
+        }
+    }
+    (advanced, diagnostics)
+}
+
 fn included_participants(
     packet: &ImplementationPacketRef,
     snapshots: &[ArtifactSnapshot],
@@ -380,7 +543,7 @@ pub fn next_lifecycle_state(source: LifecycleState) -> Option<LifecycleState> {
         LifecycleState::InReview => Some(LifecycleState::Approved),
         LifecycleState::Approved => Some(LifecycleState::Implemented),
         LifecycleState::Implemented => Some(LifecycleState::Archived),
-        LifecycleState::Archived | LifecycleState::Superseded => None,
+        LifecycleState::Archived | LifecycleState::Superseded | LifecycleState::Released => None,
     }
 }
 
@@ -405,7 +568,10 @@ mod tests {
     use proptest::prelude::*;
 
     use super::*;
-    use crate::{DocumentSnapshot, Metadata};
+    use crate::{
+        ChecklistItem, DocumentSnapshot, FeatureSnapshot, Heading, Metadata, ReleaseFeature,
+        ReleaseSnapshot,
+    };
 
     fn path(value: &str) -> ArtifactPath {
         match ArtifactPath::try_new(value) {
@@ -466,6 +632,8 @@ mod tests {
             .with_kind(ArtifactKind::UserStory, PromotionFacts::passing())
             .with_id("US-007", id_facts.clone());
         assert_eq!(facts.facts_for(&story, LifecycleState::Approved), id_facts);
+        assert_eq!(facts.facts_for_id("US-007"), Some(&id_facts));
+        assert_eq!(facts.facts_for_kind(ArtifactKind::UserStory), Some(&PromotionFacts::passing()));
 
         let mut inserted = PacketPromotionFacts::default();
         inserted.insert_kind(ArtifactKind::UserStory, PromotionFacts::passing());
@@ -563,6 +731,199 @@ mod tests {
         assert!(!plan.is_noop());
         assert!(advanced.iter().any(|item| item.path().as_str() == "specs/adr/ADR-007.md"));
         assert!(!advanced.iter().any(|item| item.path().as_str() == "specs/prds/PRD-001.md"));
+    }
+
+    fn complete_document(kind: ArtifactKind) -> DocumentSnapshot {
+        let required = match kind {
+            ArtifactKind::UserStory => [
+                "user story",
+                "story card",
+                "context and value",
+                "business rules",
+                "examples",
+                "acceptance criteria",
+                "scope boundaries",
+                "dependencies",
+                "open questions",
+                "invest check",
+            ]
+            .as_slice(),
+            ArtifactKind::Requirements => [
+                "requirements",
+                "purpose and actors",
+                "preconditions",
+                "inputs and outputs",
+                "functional requirements",
+                "postconditions and invariants",
+                "edge and failure behavior",
+                "quality requirements",
+                "traceability",
+            ]
+            .as_slice(),
+            ArtifactKind::Design => [
+                "design",
+                "context and constraints",
+                "proposed design",
+                "components and responsibilities",
+                "interfaces and contracts",
+                "data and state flow",
+                "security, performance, and operations",
+                "alternatives considered",
+                "risks and open decisions",
+                "verification approach",
+            ]
+            .as_slice(),
+            ArtifactKind::Task => [
+                "tasks",
+                "implementation approach",
+                "ordered tasks",
+                "test and verification plan",
+                "rollout and recovery",
+                "definition of done",
+            ]
+            .as_slice(),
+            _ => &[],
+        };
+        let headings = required
+            .iter()
+            .enumerate()
+            .map(|(index, text)| Heading::new(2, *text, index + 1))
+            .collect::<Vec<_>>();
+        let checklist = match kind {
+            ArtifactKind::UserStory | ArtifactKind::Task => {
+                vec![ChecklistItem::new(true, "complete", required.len() + 1)]
+            }
+            _ => Vec::new(),
+        };
+        DocumentSnapshot::new(Vec::new(), headings, checklist, None)
+    }
+
+    fn complete_packet_snapshot(
+        path_value: &str,
+        kind: ArtifactKind,
+        id: Option<&str>,
+    ) -> ArtifactSnapshot {
+        if kind == ArtifactKind::Gherkin {
+            return ArtifactSnapshot::new(
+                path(path_value),
+                kind,
+                Metadata::new(),
+                DocumentSnapshot::new(
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                    Some(FeatureSnapshot::new(
+                        Some("US-009".to_string()),
+                        Some("implemented".to_string()),
+                        Some("Feature".to_string()),
+                        1,
+                        true,
+                        true,
+                        true,
+                    )),
+                ),
+            );
+        }
+        let mut metadata = Metadata::new();
+        for field in ["title", "created", "updated", "owner"] {
+            metadata.insert_scalar(field, "value");
+        }
+        metadata.insert_scalar("status", "implemented");
+        metadata.insert_scalar("type", kind.expected_type().unwrap_or(""));
+        if let Some(id) = id {
+            metadata.insert_scalar("id", id);
+        }
+        if kind == ArtifactKind::UserStory {
+            metadata.insert_scalar("parent", "PRD-001");
+            metadata.insert_scalar("epic", "EPIC-001");
+            metadata.insert_scalar("feature", "US-009");
+        } else {
+            metadata.insert_scalar("parent", "US-009");
+        }
+        for field in ["depends_on", "requires", "blockers", "related"] {
+            metadata.insert_sequence(field, std::iter::empty::<&str>());
+        }
+        ArtifactSnapshot::new(path(path_value), kind, metadata, complete_document(kind))
+    }
+
+    fn complete_release_snapshot() -> ArtifactSnapshot {
+        let mut metadata = Metadata::new();
+        for field in ["title", "version", "commit", "date", "owner"] {
+            metadata.insert_scalar(field, "value");
+        }
+        metadata.insert_scalar("id", "REL-001");
+        metadata.insert_scalar("type", "release-record");
+        metadata.insert_scalar("status", "released");
+        metadata.insert_sequence("related", std::iter::empty::<&str>());
+        let headings = [
+            "release record",
+            "release overview",
+            "included features",
+            "verification evidence",
+            "migration & rollback",
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(index, text)| Heading::new(2, text, index + 1))
+        .collect();
+        ArtifactSnapshot::new(
+            path("specs/releases/REL-001.md"),
+            ArtifactKind::Release,
+            metadata,
+            DocumentSnapshot::new(Vec::new(), headings, Vec::new(), None).with_release(
+                ReleaseSnapshot::new(
+                    vec![ReleaseFeature::new("US-009", "implemented")],
+                    true,
+                    true,
+                ),
+            ),
+        )
+    }
+
+    /// Covers: REQ-009 FR-006 and FR-008 — a complete relocated packet produces five archival plans.
+    #[test]
+    fn archives_a_complete_relocated_packet_without_moving_files() {
+        let Ok(packet) = ImplementationPacketRef::try_new("specs/archive/009-guarded-completion")
+        else {
+            std::process::abort()
+        };
+        let snapshots = vec![
+            complete_packet_snapshot(
+                "specs/archive/009-guarded-completion/user-story.md",
+                ArtifactKind::UserStory,
+                Some("US-009"),
+            ),
+            complete_packet_snapshot(
+                "specs/archive/009-guarded-completion/scenarios.feature",
+                ArtifactKind::Gherkin,
+                None,
+            ),
+            complete_packet_snapshot(
+                "specs/archive/009-guarded-completion/requirements.md",
+                ArtifactKind::Requirements,
+                Some("REQ-009"),
+            ),
+            complete_packet_snapshot(
+                "specs/archive/009-guarded-completion/design.md",
+                ArtifactKind::Design,
+                Some("DES-009"),
+            ),
+            complete_packet_snapshot(
+                "specs/archive/009-guarded-completion/tasks.md",
+                ArtifactKind::Task,
+                Some("TASK-009"),
+            ),
+        ];
+        let decision = plan_packet_archival(
+            &packet,
+            &snapshots,
+            &[complete_release_snapshot()],
+            &actor(),
+            PromotionTimestamp::from_unix_seconds(42),
+        );
+        let PacketPromotionDecision::Accepted(plan) = decision else { std::process::abort() };
+        assert_eq!(plan.advanced().len(), 5);
+        assert!(plan.skipped().is_empty());
     }
 
     /// Covers: REQ-007 FR-006 and FR-008 — each artifact derives its own state and ID facts win.

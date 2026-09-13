@@ -22,17 +22,19 @@ pub use artifact::{
 pub use cycles::validate_relationship_cycles;
 pub use diagnostic::{Diagnostic, Location, RuleId, Severity};
 pub use document::{
-    ChecklistItem, DocumentSnapshot, FeatureSnapshot, Heading, ScenarioCoverage, SourceLine,
+    ChecklistItem, DocumentSnapshot, FeatureSnapshot, Heading, ReleaseFeature, ReleaseSnapshot,
+    ScenarioCoverage, SourceLine,
 };
 pub use identity::validate_identities;
 pub use packet::{
     ImplementationPacketRef, PacketParticipant, PacketParticipantRole, PacketPromotionDecision,
     PacketPromotionFacts, PacketPromotionPlan, PacketPromotionStep, PacketReferenceError,
-    next_lifecycle_state, plan_packet_promotion,
+    next_lifecycle_state, plan_packet_archival, plan_packet_promotion,
 };
 pub use promotion::{
     LifecycleState, PromotionActor, PromotionActorError, PromotionDecision, PromotionFacts,
-    PromotionPlan, PromotionRequest, PromotionTimestamp, decide_promotion, state_of,
+    PromotionPlan, PromotionRequest, PromotionTimestamp, completion_facts, decide_promotion,
+    state_of,
 };
 pub use readiness::{SpecReadyDecision, SpecReadyResult, evaluate_spec_ready};
 pub use reciprocal::validate_reciprocal_relationships;

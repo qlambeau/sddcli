@@ -202,6 +202,11 @@ fn markdown(path_value: &str, kind: ArtifactKind, id: &str, status: &str) -> Art
             metadata.insert_sequence("requires", Vec::<String>::new());
             metadata.insert_sequence("blockers", Vec::<String>::new());
         }
+        ArtifactKind::Release => {
+            metadata.insert_scalar("version", "v0.1.0");
+            metadata.insert_scalar("commit", "abc123");
+            metadata.insert_scalar("date", "2026-09-13");
+        }
         _ => {}
     }
     metadata.insert_sequence("related", Vec::<String>::new());
@@ -275,7 +280,8 @@ fn markdown(path_value: &str, kind: ArtifactKind, id: &str, status: &str) -> Art
         ArtifactKind::Gherkin
         | ArtifactKind::Adr
         | ArtifactKind::Database
-        | ArtifactKind::Table => Vec::new(),
+        | ArtifactKind::Table
+        | ArtifactKind::Release => Vec::new(),
     };
     let lines = headings
         .iter()

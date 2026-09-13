@@ -3,9 +3,9 @@ use std::collections::BTreeMap;
 use domain::{
     ArtifactSnapshot, Diagnostic, ImplementationPacketRef, PacketParticipant,
     PacketPromotionDecision, PacketPromotionFacts, PacketPromotionPlan, PromotionActor,
-    PromotionFacts, PromotionPlan, PromotionTimestamp, next_lifecycle_state, plan_packet_promotion,
-    validate_artifact, validate_reciprocal_relationships, validate_relationship_cycles,
-    validate_relationships,
+    PromotionFacts, PromotionPlan, PromotionTimestamp, next_lifecycle_state, plan_packet_archival,
+    plan_packet_promotion, validate_artifact, validate_reciprocal_relationships,
+    validate_relationship_cycles, validate_relationships,
 };
 
 use crate::{
@@ -155,6 +155,9 @@ where
             .iter()
             .filter_map(|candidate| candidate.snapshot().cloned())
             .collect::<Vec<_>>();
+        if command.packet().path().as_str().starts_with("specs/archive/") {
+            return self.promote_archival_packet(command, &snapshots);
+        }
         let facts = packet_facts(&snapshots, command);
         let preliminary = plan_packet_promotion(
             command.packet(),
@@ -190,6 +193,66 @@ where
             return Ok(PacketPromotionOutcome::Promoted(PacketPromotionResult::from_plan(&plan)));
         }
 
+        let paths = plan.advanced().iter().map(|item| item.path().clone()).collect::<Vec<_>>();
+        let sources = self.store.load_batch(&paths)?;
+        let source_by_path = sources
+            .into_iter()
+            .map(|source| (source.path().clone(), source))
+            .collect::<BTreeMap<_, _>>();
+        let entries = plan
+            .advanced()
+            .iter()
+            .map(|promotion| {
+                source_by_path
+                    .get(promotion.path())
+                    .cloned()
+                    .map(|source| BatchPromotionEntry::new(source, promotion.clone()))
+                    .ok_or_else(|| PromotionError::TargetNotFound(promotion.path().clone()))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        self.store.commit_batch(&entries)?;
+        Ok(PacketPromotionOutcome::Promoted(PacketPromotionResult::from_plan(&plan)))
+    }
+
+    fn promote_archival_packet(
+        &mut self,
+        command: &PromotePacketCommand,
+        snapshots: &[ArtifactSnapshot],
+    ) -> Result<PacketPromotionOutcome, PromotionError> {
+        let release_records = snapshots
+            .iter()
+            .filter(|snapshot| snapshot.kind() == domain::ArtifactKind::Release)
+            .cloned()
+            .collect::<Vec<_>>();
+        let preliminary = plan_packet_archival(
+            command.packet(),
+            snapshots,
+            &release_records,
+            command.actor(),
+            PromotionTimestamp::from_unix_seconds(0),
+        );
+        let PacketPromotionDecision::Accepted(preliminary_plan) = preliminary else {
+            let PacketPromotionDecision::Rejected(diagnostics) = preliminary else {
+                return Err(PromotionError::InconsistentDecision);
+            };
+            return Ok(PacketPromotionOutcome::Rejected(diagnostics));
+        };
+        if preliminary_plan.is_noop() {
+            return Ok(PacketPromotionOutcome::Promoted(PacketPromotionResult::from_plan(
+                &preliminary_plan,
+            )));
+        }
+        let promoted_at = self.clock.now()?;
+        let decision = plan_packet_archival(
+            command.packet(),
+            snapshots,
+            &release_records,
+            command.actor(),
+            promoted_at,
+        );
+        let PacketPromotionDecision::Accepted(plan) = decision else {
+            return Err(PromotionError::InconsistentDecision);
+        };
         let paths = plan.advanced().iter().map(|item| item.path().clone()).collect::<Vec<_>>();
         let sources = self.store.load_batch(&paths)?;
         let source_by_path = sources
