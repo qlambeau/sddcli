@@ -79,7 +79,15 @@ fn path_identity_diagnostics(snapshots: &[ArtifactSnapshot]) -> Vec<Diagnostic> 
 }
 
 fn path_encoded_id(kind: ArtifactKind, path: &ArtifactPath) -> Option<ArtifactId> {
-    if !matches!(kind, ArtifactKind::Prd | ArtifactKind::Epic | ArtifactKind::Adr) {
+    if !matches!(
+        kind,
+        ArtifactKind::Prd
+            | ArtifactKind::Epic
+            | ArtifactKind::Adr
+            | ArtifactKind::Database
+            | ArtifactKind::Table
+            | ArtifactKind::Release
+    ) {
         return None;
     }
     let filename = path.as_str().rsplit('/').next()?.strip_suffix(".md")?;

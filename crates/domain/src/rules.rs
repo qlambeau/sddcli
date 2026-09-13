@@ -72,17 +72,17 @@ fn validate_field_shapes(
 }
 
 fn field_shape_matches(field: &str, value: &MetadataValue) -> bool {
-    if matches!(field, "depends_on" | "requires" | "blockers" | "related") {
+    if matches!(field, "depends_on" | "requires" | "blockers" | "related" | "tables") {
         return matches!(value, MetadataValue::Sequence(_));
     }
-    if matches!(field, "parent" | "supersedes" | "superseded_by") {
+    if matches!(field, "parent" | "database" | "supersedes" | "superseded_by") {
         return matches!(value, MetadataValue::Null | MetadataValue::Scalar(_));
     }
     matches!(value, MetadataValue::Scalar(_))
 }
 
 fn expected_shape(field: &str) -> &'static str {
-    if matches!(field, "depends_on" | "requires" | "blockers" | "related") {
+    if matches!(field, "depends_on" | "requires" | "blockers" | "related" | "tables") {
         "a YAML sequence"
     } else {
         "a YAML scalar"
@@ -176,6 +176,8 @@ fn validate_references(
         "parent",
         "epic",
         "feature",
+        "database",
+        "tables",
         "depends_on",
         "requires",
         "related",
@@ -230,12 +232,16 @@ fn validate_references(
 
 fn expected_reference_prefixes(kind: ArtifactKind) -> &'static [(&'static str, &'static str)] {
     match kind {
-        ArtifactKind::Prd | ArtifactKind::Adr | ArtifactKind::Gherkin => &[],
+        ArtifactKind::Prd | ArtifactKind::Adr | ArtifactKind::Gherkin | ArtifactKind::Release => {
+            &[]
+        }
         ArtifactKind::Epic => &[("parent", "PRD")],
         ArtifactKind::UserStory => &[("parent", "PRD"), ("epic", "EPIC")],
         ArtifactKind::Requirements | ArtifactKind::Design | ArtifactKind::Task => {
             &[("parent", "US")]
         }
+        ArtifactKind::Database => &[("tables", "TABLE")],
+        ArtifactKind::Table => &[("database", "DB")],
     }
 }
 
@@ -478,6 +484,35 @@ fn required_fields(kind: ArtifactKind) -> &'static [&'static str] {
             "superseded_by",
             "related",
         ],
+        ArtifactKind::Database => &[
+            "id",
+            "title",
+            "type",
+            "status",
+            "created",
+            "updated",
+            "owner",
+            "engine",
+            "file_path",
+            "tables",
+            "related",
+        ],
+        ArtifactKind::Table => &[
+            "id",
+            "title",
+            "type",
+            "status",
+            "created",
+            "updated",
+            "owner",
+            "database",
+            "table_name",
+            "table_type",
+            "related",
+        ],
+        ArtifactKind::Release => {
+            &["id", "title", "type", "status", "version", "commit", "date", "owner", "related"]
+        }
     }
 }
 
@@ -550,6 +585,28 @@ fn required_headings(kind: ArtifactKind) -> &'static [&'static str] {
             "test and verification plan",
             "rollout and recovery",
             "definition of done",
+        ],
+        ArtifactKind::Database => &[
+            "database schema",
+            "database overview",
+            "configuration & extensions",
+            "schema evolution & migrations",
+            "table catalog",
+        ],
+        ArtifactKind::Table => &[
+            "table schema",
+            "purpose",
+            "ddl (schema definition)",
+            "column specifications",
+            "indexes & constraints",
+            "invariants & validation rules",
+        ],
+        ArtifactKind::Release => &[
+            "release record",
+            "release overview",
+            "included features",
+            "verification evidence",
+            "migration & rollback",
         ],
         ArtifactKind::Gherkin => &[],
     }
@@ -723,7 +780,10 @@ mod tests {
             ArtifactKind::Requirements => "specs/feature/requirements.md".to_string(),
             ArtifactKind::Design => "specs/feature/design.md".to_string(),
             ArtifactKind::Adr => "specs/adr/ADR-001.md".to_string(),
+            ArtifactKind::Database => "specs/schema/DB-001.md".to_string(),
+            ArtifactKind::Table => "specs/schema/TABLE-001.md".to_string(),
             ArtifactKind::Task => "specs/feature/tasks.md".to_string(),
+            ArtifactKind::Release => "specs/releases/REL-001.md".to_string(),
         }
     }
 
@@ -838,7 +898,10 @@ mod tests {
                 ArtifactKind::Requirements,
                 ArtifactKind::Design,
                 ArtifactKind::Adr,
+                ArtifactKind::Database,
+                ArtifactKind::Table,
                 ArtifactKind::Task,
+                ArtifactKind::Release,
             ]
         );
     }

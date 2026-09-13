@@ -21,13 +21,19 @@ pub enum ArtifactKind {
     Design,
     /// An architecture decision record.
     Adr,
+    /// A database schema document.
+    Database,
+    /// A table schema document.
+    Table,
     /// An implementation task document.
     Task,
+    /// A release record.
+    Release,
 }
 
 impl ArtifactKind {
     /// Returns artifact kinds in the required report order.
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 11] = [
         Self::Prd,
         Self::Epic,
         Self::UserStory,
@@ -35,7 +41,10 @@ impl ArtifactKind {
         Self::Requirements,
         Self::Design,
         Self::Adr,
+        Self::Database,
+        Self::Table,
         Self::Task,
+        Self::Release,
     ];
 
     /// Returns the stable lower-case type token.
@@ -49,7 +58,10 @@ impl ArtifactKind {
             Self::Requirements => "requirements",
             Self::Design => "design",
             Self::Adr => "adr",
+            Self::Database => "database",
+            Self::Table => "table",
             Self::Task => "task",
+            Self::Release => "release",
         }
     }
 
@@ -64,7 +76,10 @@ impl ArtifactKind {
             Self::Requirements => Some("feature-requirements"),
             Self::Design => Some("feature-design"),
             Self::Adr => Some("architecture-decision-record"),
+            Self::Database => Some("database-schema"),
+            Self::Table => Some("table-schema"),
             Self::Task => Some("implementation-tasks"),
+            Self::Release => Some("release-record"),
         }
     }
 
@@ -79,7 +94,10 @@ impl ArtifactKind {
             Self::Requirements => Some("REQ"),
             Self::Design => Some("DES"),
             Self::Adr => Some("ADR"),
+            Self::Database => Some("DB"),
+            Self::Table => Some("TABLE"),
             Self::Task => Some("TASK"),
+            Self::Release => Some("REL"),
         }
     }
 
@@ -113,6 +131,24 @@ impl ArtifactKind {
             && segments.get(2).is_some_and(|file| valid_numbered_name(file, "PRD"))
         {
             return Some(Self::Prd);
+        }
+        if segments.len() == 3
+            && segments.first() == Some(&"specs")
+            && segments.get(1) == Some(&"releases")
+            && segments.get(2).is_some_and(|file| valid_numbered_name(file, "REL"))
+        {
+            return Some(Self::Release);
+        }
+        if segments.len() == 3
+            && segments.first() == Some(&"specs")
+            && segments.get(1) == Some(&"schema")
+        {
+            if segments.get(2).is_some_and(|file| valid_numbered_name(file, "DB")) {
+                return Some(Self::Database);
+            }
+            if segments.get(2).is_some_and(|file| valid_numbered_name(file, "TABLE")) {
+                return Some(Self::Table);
+            }
         }
         if segments.len() == 4
             && segments.first() == Some(&"specs")
@@ -157,7 +193,7 @@ fn valid_numbered_directory(value: &str, prefix: &str) -> bool {
     number.len() == 3 && number.bytes().all(|byte| byte.is_ascii_digit())
 }
 
-fn valid_archive_directory(value: &str) -> bool {
+pub(crate) fn valid_archive_directory(value: &str) -> bool {
     value.len() > 4
         && value.as_bytes().get(3) == Some(&b'-')
         && value.as_bytes().get(0..3).is_some_and(|number| number.iter().all(u8::is_ascii_digit))
@@ -166,6 +202,12 @@ fn valid_archive_directory(value: &str) -> bool {
 /// Identifies a repository-relative artifact path.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct ArtifactPath(String);
+
+impl Display for ArtifactPath {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
 
 impl ArtifactPath {
     /// Creates a validated repository-relative path.
@@ -561,7 +603,7 @@ mod tests {
     /// Covers: REQ-001 FR-007 — each kind has stable output metadata.
     #[test]
     fn exposes_kind_contracts() {
-        assert_eq!(ArtifactKind::ALL.len(), 8);
+        assert_eq!(ArtifactKind::ALL.len(), 11);
         assert_eq!(ArtifactKind::Prd.token(), "prd");
         assert_eq!(ArtifactKind::Gherkin.expected_type(), None);
         assert_eq!(ArtifactKind::Gherkin.id_prefix(), None);

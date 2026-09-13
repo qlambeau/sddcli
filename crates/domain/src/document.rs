@@ -93,6 +93,51 @@ impl ChecklistItem {
     }
 }
 
+/// Identifies an explicit Gherkin behavior-coverage category.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum ScenarioCoverage {
+    /// Covers the expected successful behavior.
+    Happy,
+    /// Covers an alternate successful or valid path.
+    Alternate,
+    /// Covers an expected failure path.
+    Failure,
+    /// Covers a boundary or edge condition.
+    Boundary,
+}
+
+impl ScenarioCoverage {
+    /// Returns every required coverage category in stable order.
+    pub const ALL: [Self; 4] = [Self::Happy, Self::Alternate, Self::Failure, Self::Boundary];
+
+    /// Classifies an exact case-sensitive scenario-name prefix.
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        if name.starts_with("Happy:") {
+            Some(Self::Happy)
+        } else if name.starts_with("Alternate:") {
+            Some(Self::Alternate)
+        } else if name.starts_with("Failure:") {
+            Some(Self::Failure)
+        } else if name.starts_with("Boundary:") {
+            Some(Self::Boundary)
+        } else {
+            None
+        }
+    }
+
+    /// Returns the required scenario-name prefix.
+    #[must_use]
+    pub const fn prefix(self) -> &'static str {
+        match self {
+            Self::Happy => "Happy:",
+            Self::Alternate => "Alternate:",
+            Self::Failure => "Failure:",
+            Self::Boundary => "Boundary:",
+        }
+    }
+}
+
 /// The normalized structure extracted from a Gherkin file.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FeatureSnapshot {
@@ -103,6 +148,7 @@ pub struct FeatureSnapshot {
     has_given: bool,
     has_when: bool,
     has_then: bool,
+    coverage: std::collections::BTreeSet<ScenarioCoverage>,
 }
 
 impl FeatureSnapshot {
@@ -121,6 +167,38 @@ impl FeatureSnapshot {
         contains_when_step: bool,
         contains_then_step: bool,
     ) -> Self {
+        Self::new_with_coverage(
+            parent,
+            status,
+            name,
+            scenario_count,
+            contains_given_step,
+            contains_when_step,
+            contains_then_step,
+            std::iter::empty(),
+        )
+    }
+
+    /// Creates a normalized Gherkin structure with explicit coverage categories.
+    #[must_use]
+    #[allow(
+        clippy::similar_names,
+        clippy::too_many_arguments,
+        reason = "the normalized Gherkin boundary preserves seven existing fields and one coverage collection"
+    )]
+    pub fn new_with_coverage<I>(
+        parent: Option<String>,
+        status: Option<String>,
+        name: Option<String>,
+        scenario_count: usize,
+        contains_given_step: bool,
+        contains_when_step: bool,
+        contains_then_step: bool,
+        coverage: I,
+    ) -> Self
+    where
+        I: IntoIterator<Item = ScenarioCoverage>,
+    {
         Self {
             parent,
             status,
@@ -129,6 +207,7 @@ impl FeatureSnapshot {
             has_given: contains_given_step,
             has_when: contains_when_step,
             has_then: contains_then_step,
+            coverage: coverage.into_iter().collect(),
         }
     }
 
@@ -173,6 +252,77 @@ impl FeatureSnapshot {
     pub const fn has_then(&self) -> bool {
         self.has_then
     }
+
+    /// Returns the explicit scenario coverage categories.
+    #[must_use]
+    pub fn coverage(&self) -> &std::collections::BTreeSet<ScenarioCoverage> {
+        &self.coverage
+    }
+}
+
+/// Identifies one feature row recorded in a release record.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ReleaseFeature {
+    story_id: String,
+    status: String,
+}
+
+impl ReleaseFeature {
+    /// Creates a normalized included-feature row.
+    #[must_use]
+    pub fn new(story_id: impl Into<String>, status: impl Into<String>) -> Self {
+        Self { story_id: story_id.into(), status: status.into() }
+    }
+
+    /// Returns the included user-story identifier.
+    #[must_use]
+    pub fn story_id(&self) -> &str {
+        &self.story_id
+    }
+
+    /// Returns the recorded feature lifecycle status.
+    #[must_use]
+    pub fn status(&self) -> &str {
+        &self.status
+    }
+}
+
+/// Structure extracted from a release record.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ReleaseSnapshot {
+    features: Vec<ReleaseFeature>,
+    has_verification_evidence: bool,
+    has_release_commit: bool,
+}
+
+impl ReleaseSnapshot {
+    /// Creates normalized release-record evidence.
+    #[must_use]
+    pub fn new(
+        features: Vec<ReleaseFeature>,
+        has_verification_evidence: bool,
+        has_release_commit: bool,
+    ) -> Self {
+        Self { features, has_verification_evidence, has_release_commit }
+    }
+
+    /// Returns included features in source order.
+    #[must_use]
+    pub fn features(&self) -> &[ReleaseFeature] {
+        &self.features
+    }
+
+    /// Returns whether verification evidence is present.
+    #[must_use]
+    pub const fn has_verification_evidence(&self) -> bool {
+        self.has_verification_evidence
+    }
+
+    /// Returns whether a concrete release commit is present.
+    #[must_use]
+    pub const fn has_release_commit(&self) -> bool {
+        self.has_release_commit
+    }
 }
 
 /// Structure extracted from a Markdown or Gherkin artifact.
@@ -182,6 +332,7 @@ pub struct DocumentSnapshot {
     headings: Vec<Heading>,
     checklist_items: Vec<ChecklistItem>,
     feature: Option<FeatureSnapshot>,
+    release: Option<ReleaseSnapshot>,
 }
 
 impl DocumentSnapshot {
@@ -193,7 +344,14 @@ impl DocumentSnapshot {
         checklist_items: Vec<ChecklistItem>,
         feature: Option<FeatureSnapshot>,
     ) -> Self {
-        Self { lines, headings, checklist_items, feature }
+        Self { lines, headings, checklist_items, feature, release: None }
+    }
+
+    /// Attaches normalized release-record data.
+    #[must_use]
+    pub fn with_release(mut self, release: ReleaseSnapshot) -> Self {
+        self.release = Some(release);
+        self
     }
 
     /// Returns an empty document snapshot.
@@ -224,6 +382,12 @@ impl DocumentSnapshot {
     #[must_use]
     pub fn feature(&self) -> Option<&FeatureSnapshot> {
         self.feature.as_ref()
+    }
+
+    /// Returns normalized release-record data, when this is a release record.
+    #[must_use]
+    pub fn release(&self) -> Option<&ReleaseSnapshot> {
+        self.release.as_ref()
     }
 }
 

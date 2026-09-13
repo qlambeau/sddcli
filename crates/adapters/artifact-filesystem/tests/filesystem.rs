@@ -69,6 +69,39 @@ fn parses_markdown_checklist_items() {
     assert_eq!(snapshot.document().checklist_items().len(), 1);
 }
 
+/// Covers: REQ-009 FR-005 and FR-011 — release records normalize included features and local evidence.
+#[test]
+fn parses_release_record_evidence_and_feature_rows() {
+    let Ok(path) = ArtifactPath::try_new("specs/releases/REL-001.md") else { return };
+    let contents = "---\nid: REL-001\nstatus: approved\ncommit: abc123\n---\n# Release Record\n## Included Features\n| Feature ID | Title | User Story | Status |\n| --- | --- | --- | --- |\n| 009 | Completion | `US-009` | implemented |\n## Verification Evidence\n- cargo test passed\n";
+
+    let snapshot = parse_artifact(path, ArtifactKind::Release, contents);
+
+    let Some(release) = snapshot.document().release() else { return };
+    assert_eq!(release.features().len(), 1);
+    let Some(feature) = release.features().first() else { return };
+    assert_eq!(feature.story_id(), "US-009");
+    assert!(release.has_verification_evidence());
+    assert!(release.has_release_commit());
+    assert!(snapshot.parser_diagnostics().is_empty());
+}
+
+/// Covers: REQ-009 FR-005 and FR-011 — malformed included feature rows remain actionable diagnostics.
+#[test]
+fn reports_malformed_release_feature_rows() {
+    let Ok(path) = ArtifactPath::try_new("specs/releases/REL-001.md") else { return };
+    let contents = "---\nid: REL-001\nstatus: approved\ncommit: abc123\n---\n## Included Features\n| Feature ID | Title | User Story | Status |\n| --- | --- | --- | --- |\n| 009 | Completion | not-a-story | implemented |\n";
+
+    let snapshot = parse_artifact(path, ArtifactKind::Release, contents);
+
+    assert!(
+        snapshot
+            .parser_diagnostics()
+            .iter()
+            .any(|diagnostic| { diagnostic.rule_id().as_str().ends_with("RELEASE_FEATURE_ROW") })
+    );
+}
+
 /// Covers: REQ-001 FR-006 — malformed frontmatter remains a path-based diagnostic candidate.
 #[test]
 fn reports_malformed_frontmatter_without_panicking() {
@@ -157,6 +190,15 @@ fn parsed_candidate_can_be_validated_after_discovery() {
 }
 
 fn valid_artifact_contents(kind: ArtifactKind) -> String {
+    if kind == ArtifactKind::Release {
+        return "---\nid: REL-001\ntitle: Release\ntype: release-record\nstatus: approved\nversion: v0.1.0\ncommit: abc123\ndate: 2026-09-04\nowner: project-owner\nrelated: []\n---\n# Release Record\n## Release Overview\n## Included Features\n| Feature ID | Title | User Story | Status |\n| --- | --- | --- | --- |\n| 009 | Feature | `US-009` | implemented |\n## Verification Evidence\n- cargo test passed\n## Migration & Rollback\nrollback\n".to_string();
+    }
+    if kind == ArtifactKind::Database {
+        return "---\nid: DB-001\ntitle: Database\ntype: database-schema\nstatus: approved\ncreated: 2026-09-04\nupdated: 2026-09-04\nowner: project-owner\nengine: SQLite\nfile_path: specs/data.sqlite\ntables: []\nrelated: []\n---\n## Database Schema\n## Database Overview\n## Configuration & Extensions\n## Schema Evolution & Migrations\n## Table Catalog\n".to_string();
+    }
+    if kind == ArtifactKind::Table {
+        return "---\nid: TABLE-001\ntitle: Table\ntype: table-schema\nstatus: approved\ncreated: 2026-09-04\nupdated: 2026-09-04\nowner: project-owner\ndatabase: DB-001\ntable_name: entries\ntable_type: table\nrelated: []\n---\n## Table Schema\n## Purpose\n## DDL (Schema Definition)\n## Column Specifications\n## Indexes & Constraints\n## Invariants & Validation Rules\n".to_string();
+    }
     if kind == ArtifactKind::Gherkin {
         return "# parent: US-001\n# status: approved\n\nFeature: Validate\n\n  Scenario: Works\n    Given an active repository\n    When validation runs\n    Then the report succeeds\n".to_string();
     }
@@ -188,6 +230,10 @@ fn valid_artifact_contents(kind: ArtifactKind) -> String {
     )
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "fixture lists every recognized artifact heading contract"
+)]
 fn headings_for(kind: ArtifactKind) -> &'static [&'static str] {
     match kind {
         ArtifactKind::Prd => &[
@@ -260,6 +306,28 @@ fn headings_for(kind: ArtifactKind) -> &'static [&'static str] {
             "Final Notes",
             "Additional Notes",
         ],
+        ArtifactKind::Release => &[
+            "Release Record",
+            "Release Overview",
+            "Included Features",
+            "Verification Evidence",
+            "Migration & Rollback",
+        ],
+        ArtifactKind::Database => &[
+            "Database Schema",
+            "Database Overview",
+            "Configuration & Extensions",
+            "Schema Evolution & Migrations",
+            "Table Catalog",
+        ],
+        ArtifactKind::Table => &[
+            "Table Schema",
+            "Purpose",
+            "DDL (Schema Definition)",
+            "Column Specifications",
+            "Indexes & Constraints",
+            "Invariants & Validation Rules",
+        ],
         ArtifactKind::Task => &[
             "Tasks",
             "Implementation Approach",
@@ -281,13 +349,16 @@ fn canonical_path(kind: ArtifactKind) -> &'static str {
         ArtifactKind::Requirements => "specs/validate/requirements.md",
         ArtifactKind::Design => "specs/validate/design.md",
         ArtifactKind::Adr => "specs/adr/ADR-001.md",
+        ArtifactKind::Database => "specs/schema/DB-001.md",
+        ArtifactKind::Table => "specs/schema/TABLE-001.md",
         ArtifactKind::Task => "specs/validate/tasks.md",
+        ArtifactKind::Release => "specs/releases/REL-001.md",
     }
 }
 
-/// Covers: REQ-001 FR-001 through FR-009 — all eight supported types pass through the real source and use case.
+/// Covers: REQ-001 FR-001 through FR-009 and REQ-008 FR-002 — all recognized types pass through the real source and use case.
 #[test]
-fn validates_all_eight_types_as_one_successful_report() {
+fn validates_all_recognized_types_as_one_successful_report() {
     let Ok(directory) = tempfile::tempdir() else { return };
     let kinds = ArtifactKind::ALL;
     assert!(kinds.iter().all(|kind| {
@@ -299,7 +370,7 @@ fn validates_all_eight_types_as_one_successful_report() {
     assert!(result.is_ok());
     let Ok(report) = result else { return };
     assert_eq!(report.status(), OverallStatus::Success, "report: {report:?}");
-    assert_eq!(report.artifacts().len(), 8);
+    assert_eq!(report.artifacts().len(), 11);
     assert!(report.artifacts().iter().all(
         |artifact| artifact.status() == ArtifactStatus::Ok && artifact.violations().is_empty()
     ));
