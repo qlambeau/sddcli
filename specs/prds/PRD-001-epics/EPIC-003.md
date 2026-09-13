@@ -2,9 +2,9 @@
 id: EPIC-003
 title: "Lifecycle promotion and readiness"
 type: epic-brief
-status: approved
+status: implemented
 created: 2026-09-07
-updated: 2026-09-07
+updated: 2026-09-13
 owner: TBD
 parent: PRD-001
 depends_on: [EPIC-001, EPIC-002]
@@ -67,18 +67,18 @@ Spec-Ready predicate before implementation.
 
 ## Success Criteria
 
-- [ ] Valid lifecycle transitions succeed; skipped, backward, invalid, and
+- [x] Valid lifecycle transitions succeed; skipped, backward, invalid, and
       terminal-state transitions fail with actionable diagnostics.
-- [ ] Every successful promotion records the source state, target state, actor,
+- [x] Every successful promotion records the source state, target state, actor,
       and promotion timestamp.
-- [ ] A failed packet promotion mutates no artifact in the packet.
-- [ ] Spec-Ready evaluation reports every applicable unmet predicate and never
+- [x] A failed packet promotion mutates no artifact in the packet.
+- [x] Spec-Ready evaluation reports every applicable unmet predicate and never
       mutates repository content.
-- [ ] Valid complete packets pass the readiness check; incomplete or blocked
+- [x] Valid complete packets pass the readiness check; incomplete or blocked
       packets fail it.
-- [ ] Promotion and readiness results are deterministic and require no network
+- [x] Promotion and readiness results are deterministic and require no network
       or AI service.
-- [ ] Promotion does not move files and does not alter excluded artifacts.
+- [x] Promotion does not move files and does not alter excluded artifacts.
 
 ## Dependencies
 
